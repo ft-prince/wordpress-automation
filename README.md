@@ -20,7 +20,7 @@ A self-hosted dashboard that plans, writes, and publishes blog content for one o
 
 ## Setup
 
-1. `python3 -m venv .venv && .venv/bin/pip install fastapi "uvicorn[standard]" pyyaml apscheduler`
+1. `python3 -m venv .venv && .venv/bin/pip install fastapi "uvicorn[standard]" pyyaml apscheduler sqlmodel`
 2. `cd dashboard && npm install && npm run build`
 3. Create `.env` in the repo root:
 
