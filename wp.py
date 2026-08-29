@@ -34,6 +34,26 @@ def _config(env):
 TIMEOUT_SECONDS = 30
 
 
+def call_ns(path, payload=None, method="GET", env=None):
+    """Call a non-wp/v2 REST namespace, e.g. /automation/v1/theme-files."""
+    base, token = _config(env or load_env())
+    root = base.rsplit("/wp/v2", 1)[0]
+    body = json.dumps(payload).encode() if payload is not None else None
+    request = urllib.request.Request(
+        f"{root}{path}", data=body, method=method,
+        headers={"Authorization": f"Basic {token}", "Content-Type": "application/json",
+                 "User-Agent": "wp-automation/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            return json.loads(response.read() or b"null")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf8", "replace")[:400]
+        raise RuntimeError(f"WP {exc.code} on {method} {path}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"cannot reach WordPress: {exc.reason}") from exc
+
+
 def call(path, payload=None, method="GET", env=None):
     """One HTTP call to the WP REST API. Raises RuntimeError with the API's own message."""
     base, token = _config(env or load_env())

@@ -9,6 +9,7 @@ import Logs from './components/Logs'
 import Health from './components/Health'
 import Seo from './components/Seo'
 import Sites from './components/Sites'
+import ThemeFiles from './components/ThemeFiles'
 import Topics from './components/Topics'
 import { Secrets, Audit } from './components/SecretsAudit'
 
@@ -20,6 +21,7 @@ const NAV = [
   ['schedule', 'Schedule', 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4'],
   ['logs', 'Logs', 'M4 5h16M4 10h10M4 15h16M4 20h7'],
   ['seo', 'SEO', 'M10 10m-6 0a6 6 0 1112 0 6 6 0 11-12 0M14.5 14.5L21 21M8 10h4M10 8v4'],
+  ['theme', 'Theme', 'M8 3v6a4 4 0 008 0V3M6 3h12M12 13v8M9 21h6'],
   ['sites', 'Sites', 'M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18'],
   ['health', 'Health', 'M3 12h4l2-6 4 12 2-6h6'],
   ['secrets', 'Secrets', 'M8 11V7a4 4 0 118 0v4M5 11h14v9H5z'],
@@ -143,7 +145,7 @@ function Login({ onDone }) {
   )
 }
 
-const PAGES = ['overview', 'topics', 'posts', 'automations', 'schedule', 'logs', 'seo', 'sites', 'health', 'secrets', 'audit']
+const PAGES = ['overview', 'topics', 'posts', 'automations', 'schedule', 'logs', 'seo', 'theme', 'sites', 'health', 'secrets', 'audit']
 
 function pathToState() {
   const parts = window.location.pathname.split('/').filter(Boolean)
@@ -254,6 +256,7 @@ export default function App() {
           {page === 'schedule' && <Schedule notify={notify} />}
           {page === 'logs' && <Logs notify={notify} />}
           {page === 'seo' && <Seo notify={notify} onNavigate={navigate} />}
+          {page === 'theme' && <ThemeFiles notify={notify} />}
           {page === 'sites' && <Sites notify={notify} onSiteChange={onSiteChange} />}
           {page === 'health' && <Health />}
           {page === 'secrets' && <Secrets notify={notify} />}

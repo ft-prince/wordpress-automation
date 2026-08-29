@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: Servelens SEO
+ * Plugin Name: Site Automation Helpers
  * Description: Meta description (custom field or excerpt), Open Graph, Twitter cards, canonical URL.
- * Version: 1.1
+ * Version: 1.2
  *
  * Install: upload to wp-content/mu-plugins/ (create the folder if missing).
  * mu-plugins load automatically — no activation step, no admin screen to break.
@@ -88,3 +88,125 @@ add_action( 'wp_head', function () {
         echo '<script type="application/ld+json">' . wp_json_encode( $schema, JSON_UNESCAPED_SLASHES ) . '</script>' . "\n";
     }
 }, 5 );
+
+
+// ── Theme file CRUD for the automation dashboard ──────────────────────────
+// Admin-only (edit_themes), active theme directory only, whitelisted extensions.
+// PHP files are syntax-checked before writing; the previous version is backed up.
+
+function autodash_theme_path( $rel ) {
+    $root = wp_normalize_path( get_stylesheet_directory() );
+    $rel  = ltrim( (string) $rel, '/' );
+    if ( '' === $rel || false !== strpos( $rel, '..' ) ) {
+        return null;
+    }
+    $ext = strtolower( pathinfo( $rel, PATHINFO_EXTENSION ) );
+    if ( ! in_array( $ext, array( 'php', 'css', 'js', 'txt', 'md', 'html' ), true ) ) {
+        return null;
+    }
+    $full = wp_normalize_path( $root . '/' . $rel );
+    if ( 0 !== strpos( $full, $root . '/' ) && $full !== $root ) {
+        return null;
+    }
+    return $full;
+}
+
+function autodash_backup_file( $full ) {
+    if ( ! file_exists( $full ) ) {
+        return;
+    }
+    $up  = wp_upload_dir();
+    $dir = $up['basedir'] . '/automation-backups';
+    if ( ! is_dir( $dir ) ) {
+        wp_mkdir_p( $dir );
+    }
+    @copy( $full, $dir . '/' . basename( $full ) . '.' . gmdate( 'Ymd-His' ) . '.bak' );
+}
+
+function autodash_php_syntax_ok( $code, &$error ) {
+    try {
+        token_get_all( $code, TOKEN_PARSE );
+        return true;
+    } catch ( ParseError $e ) {
+        $error = $e->getMessage() . ' on line ' . $e->getLine();
+        return false;
+    }
+}
+
+add_action( 'rest_api_init', function () {
+    $perm = function () { return current_user_can( 'edit_themes' ); };
+
+    register_rest_route( 'automation/v1', '/theme-files', array(
+        'methods'             => 'GET',
+        'permission_callback' => $perm,
+        'callback'            => function () {
+            $root  = wp_normalize_path( get_stylesheet_directory() );
+            $out   = array();
+            $iter  = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $root, FilesystemIterator::SKIP_DOTS ) );
+            foreach ( $iter as $f ) {
+                $rel = ltrim( substr( wp_normalize_path( $f->getPathname() ), strlen( $root ) ), '/' );
+                if ( null === autodash_theme_path( $rel ) ) {
+                    continue;
+                }
+                $out[] = array( 'path' => $rel, 'size' => $f->getSize(), 'modified' => gmdate( 'c', $f->getMTime() ) );
+            }
+            usort( $out, function ( $a, $b ) { return strcmp( $a['path'], $b['path'] ); } );
+            return array( 'theme' => get_stylesheet(), 'files' => $out );
+        },
+    ) );
+
+    register_rest_route( 'automation/v1', '/theme-file', array(
+        array(
+            'methods'             => 'GET',
+            'permission_callback' => $perm,
+            'callback'            => function ( $req ) {
+                $full = autodash_theme_path( $req->get_param( 'path' ) );
+                if ( ! $full || ! file_exists( $full ) ) {
+                    return new WP_Error( 'not_found', 'File not found', array( 'status' => 404 ) );
+                }
+                return array( 'path' => $req->get_param( 'path' ), 'content' => file_get_contents( $full ) );
+            },
+        ),
+        array(
+            'methods'             => 'POST',
+            'permission_callback' => $perm,
+            'callback'            => function ( $req ) {
+                $full = autodash_theme_path( $req->get_param( 'path' ) );
+                if ( ! $full ) {
+                    return new WP_Error( 'bad_path', 'Path not allowed', array( 'status' => 400 ) );
+                }
+                $content = (string) $req->get_param( 'content' );
+                $err     = '';
+                if ( 'php' === strtolower( pathinfo( $full, PATHINFO_EXTENSION ) )
+                    && ! autodash_php_syntax_ok( $content, $err ) ) {
+                    return new WP_Error( 'syntax_error', 'PHP syntax error: ' . $err, array( 'status' => 400 ) );
+                }
+                autodash_backup_file( $full );
+                $dir = dirname( $full );
+                if ( ! is_dir( $dir ) ) {
+                    wp_mkdir_p( $dir );
+                }
+                if ( false === file_put_contents( $full, $content ) ) {
+                    return new WP_Error( 'write_failed', 'Could not write file', array( 'status' => 500 ) );
+                }
+                return array( 'saved' => true, 'path' => $req->get_param( 'path' ), 'bytes' => strlen( $content ) );
+            },
+        ),
+        array(
+            'methods'             => 'DELETE',
+            'permission_callback' => $perm,
+            'callback'            => function ( $req ) {
+                $full = autodash_theme_path( $req->get_param( 'path' ) );
+                if ( ! $full || ! file_exists( $full ) ) {
+                    return new WP_Error( 'not_found', 'File not found', array( 'status' => 404 ) );
+                }
+                if ( in_array( basename( $full ), array( 'functions.php', 'index.php', 'style.css' ), true ) ) {
+                    return new WP_Error( 'protected', 'This core theme file cannot be deleted', array( 'status' => 400 ) );
+                }
+                autodash_backup_file( $full );
+                unlink( $full );
+                return array( 'deleted' => true );
+            },
+        ),
+    ) );
+} );

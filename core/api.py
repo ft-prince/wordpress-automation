@@ -497,6 +497,55 @@ def wp_item_update(base: str, item_id: int, body: ItemFields, site: str | None =
     return result
 
 
+class ThemeFileBody(BaseModel):
+    path: str
+    content: str = ""
+
+
+def _theme_call(path, site, payload=None, method="GET"):
+    import urllib.parse as _up
+
+    import wp as wp_mod
+
+    env = sites.env_for(site)
+    try:
+        return wp_mod.call_ns(path, payload, method=method, env=env)
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "404" in msg and "rest_no_route" in msg:
+            raise HTTPException(502, "This site is running an older helper plugin. Upload servelens-seo.php v1.2 to wp-content/mu-plugins first")
+        raise HTTPException(502, msg[:300])
+
+
+@app.get("/api/theme/files")
+def theme_files(site: str | None = None):
+    return _theme_call("/automation/v1/theme-files", site)
+
+
+@app.get("/api/theme/file")
+def theme_file(path: str, site: str | None = None):
+    import urllib.parse as _up
+
+    return _theme_call(f"/automation/v1/theme-file?path={_up.quote(path)}", site)
+
+
+@app.post("/api/theme/file")
+def theme_file_save(body: ThemeFileBody, site: str | None = None):
+    result = _theme_call("/automation/v1/theme-file", site,
+                         {"path": body.path, "content": body.content}, method="POST")
+    store.add_audit("dashboard", "theme-file-save", body.path, None, {"bytes": len(body.content)})
+    return result
+
+
+@app.delete("/api/theme/file")
+def theme_file_delete(path: str, site: str | None = None):
+    import urllib.parse as _up
+
+    result = _theme_call(f"/automation/v1/theme-file?path={_up.quote(path)}", site, method="DELETE")
+    store.add_audit("dashboard", "theme-file-delete", path)
+    return result
+
+
 class GenerateRequest(BaseModel):
     topic: str
     words: int = 800
