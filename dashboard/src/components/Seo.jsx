@@ -136,6 +136,10 @@ export default function Seo({ notify, onNavigate }) {
             </a>
             <span className="rounded-full border border-edge px-2 py-0.5 text-xs text-dim">{r.type}</span>
             <Badge status={r.status} />
+            <button className={btnGhost}
+              onClick={() => (r.type === 'post' ? onNavigate('posts', r.id) : setEditItem({ base: r.base, id: r.id }))}>
+              Edit
+            </button>
           </div>
           <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-edge">
             <div className="h-full rounded-full transition-all duration-300" style={{ width: `${r.score}%`, background: scoreTone(r.score) }} />

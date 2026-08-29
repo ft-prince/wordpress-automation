@@ -17,10 +17,43 @@ const req = (path, method = 'GET', body) =>
 export default function ItemEditor({ base, itemId, notify, onClose, onSaved }) {
   const [item, setItem] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [tpl, setTpl] = useState(null)        // { path, content, original } | 'missing'
+  const [tplBusy, setTplBusy] = useState(false)
 
   useEffect(() => {
     req(`/api/wp/items/${base}/${itemId}`).then(setItem).catch((e) => { notify(e.message, true); onClose() })
   }, [base, itemId])
+
+  // Template-built page: find and load the PHP file that actually renders it.
+  useEffect(() => {
+    if (!item?.builder_managed) return
+    req('/api/theme/files')
+      .then((d) => {
+        const paths = d.files.map((f) => f.path)
+        const candidates = [
+          item.template,
+          `page-${item.slug}.php`,
+          `page-templates/${item.slug}.php`,
+          `page-templates/tpl-${item.slug}.php`,
+        ].filter(Boolean)
+        const hit = candidates.find((c) => paths.includes(c))
+          || paths.find((p) => item.slug && p.includes(item.slug))
+        if (!hit) { setTpl('missing'); return }
+        return fetch(`/api/theme/file?path=${encodeURIComponent(hit)}${site.current() ? `&site=${site.current()}` : ''}`,
+          { headers: { 'X-Auth-Token': auth.token() } })
+          .then((r) => (r.ok ? r.json() : Promise.reject(new Error('could not read template'))))
+          .then((f) => setTpl({ path: hit, content: f.content, original: f.content }))
+      })
+      .catch(() => setTpl('missing'))
+  }, [item?.builder_managed])
+
+  const saveTpl = () => {
+    setTplBusy(true)
+    req('/api/theme/file', 'POST', { path: tpl.path, content: tpl.content })
+      .then(() => { notify(`Template saved. Previous version backed up.`); setTpl({ ...tpl, original: tpl.content }) })
+      .catch((e) => notify(e.message, true))
+      .finally(() => setTplBusy(false))
+  }
 
   if (!item) return <Modal title="Edit" onClose={onClose} wide><Spinner /></Modal>
 
@@ -78,13 +111,35 @@ export default function ItemEditor({ base, itemId, notify, onClose, onSaved }) {
         <div className="block text-sm">
           <span className="text-dim">Content</span>
           {item.builder_managed ? (
-            <div className="mt-1 rounded-lg border border-edge bg-base p-4 text-sm text-dim">
-              This page's layout is built with a page builder or theme template, so its text
-              lives there rather than here. Saving content from this box would blank the live
-              design. Use <a className="underline" href={item.edit_url} target="_blank" rel="noreferrer">Open in WordPress</a> for
-              layout and text changes. Title, slug, status and the SEO description above all
-              save safely from here.
-            </div>
+            tpl === null ? (
+              <div className="mt-1 rounded-lg border border-edge bg-base p-4 text-sm text-dim">Finding this page's template file…</div>
+            ) : tpl === 'missing' ? (
+              <div className="mt-1 rounded-lg border border-edge bg-base p-4 text-sm text-dim">
+                This page renders from a theme template, but no matching file was found
+                automatically. Open the Theme page in the sidebar to browse the files yourself.
+              </div>
+            ) : (
+              <div className="mt-1 space-y-2">
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="mono text-dim">theme file: <span className="text-ink">{tpl.path}</span></span>
+                  {tpl.content !== tpl.original && <span style={{ color: 'var(--color-accent)' }}>unsaved changes</span>}
+                  <span className="ml-auto flex gap-2">
+                    <button type="button" className={btnGhost} disabled={tpl.content === tpl.original}
+                      onClick={() => setTpl({ ...tpl, content: tpl.original })}>Discard</button>
+                    <button type="button" className={btnPrimary} disabled={tpl.content === tpl.original || tplBusy} onClick={saveTpl}>
+                      {tplBusy ? 'Saving…' : 'Save template'}
+                    </button>
+                  </span>
+                </div>
+                <textarea
+                  className="h-72 w-full resize-none rounded-lg border border-edge bg-base p-3 text-xs mono outline-none focus:border-accent"
+                  spellCheck={false} value={tpl.content}
+                  onChange={(e) => setTpl({ ...tpl, content: e.target.value })}
+                  aria-label={`Template ${tpl.path}`}
+                />
+                <p className="text-xs text-dim">PHP is syntax-checked before saving and the previous version is backed up automatically. Edit the text between the HTML tags; leave the PHP bits as they are.</p>
+              </div>
+            )
           ) : (
             <RichEditor value={item.content_raw} onChange={(v) => set('content_raw', v)} />
           )}

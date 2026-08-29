@@ -235,6 +235,7 @@ def get_item(base, item_id, site=None):
         "supports_excerpt": "excerpt" in p,
         "excerpt_raw": ((p.get("excerpt") or {}).get("raw", "") if "excerpt" in p else ""),
         "meta_desc": ((p.get("meta") or {}).get("servelens_seo_desc") or ""),
+        "template": p.get("template") or "",
         "edit_url": f"{env['WEBSITE_LINK'].rstrip('/')}/wp-admin/post.php?post={p['id']}&action=edit",
     }
 
