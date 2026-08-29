@@ -1,0 +1,20 @@
+# secrets and local state
+.env
+sites.json
+posted.txt
+automation.db*
+.backups/
+*.log
+nohup.out
+
+# local tooling
+.venv/
+__pycache__/
+node_modules/
+dashboard/dist/
+
+# local instruction files
+claude.md
+CLAUDE.md
+.claude/
+.DS_Store

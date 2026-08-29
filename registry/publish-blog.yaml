@@ -1,0 +1,25 @@
+id: publish-blog
+name: Publish blog post
+description: Picks the next unused topic, writes it with Groq, posts it to WordPress
+  as a draft
+runtime: python
+entrypoint: blog.py
+schedule: 0 9 * * 1,4
+enabled: true
+timeout_seconds: 300
+retries:
+  count: 1
+  backoff_seconds: 60
+args:
+  policy: draft
+  category: Insights
+env:
+- GROQ_KEY
+- WEBSITE_LINK
+- WP_USER
+- APPLICATION_PASSWORD
+tags:
+- content
+- wordpress
+alert_on_failure: true
+owner: prince

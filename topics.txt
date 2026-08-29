@@ -1,0 +1,4 @@
+# One topic per line. Delete or add freely. Lines starting with # are ignored.
+Why small businesses need uptime monitoring
+How to read server response time metrics
+5 signs your website is slower than your competitors
