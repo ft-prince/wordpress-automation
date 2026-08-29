@@ -254,25 +254,33 @@ def retry_run(run_id: int):
     return {"started": True, "job_id": run["job_id"]}
 
 
+def _posts_by_status(statuses, site, limit=50):
+    """Fetch several status lists concurrently — cold cache goes from Nx latency to 1x.
+    A status that errors comes back as None so callers can tell 'empty' from 'unreachable'."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(status):
+        try:
+            return wp_api.posts(status, limit, site=site)
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=len(statuses)) as pool:
+        return dict(zip(statuses, pool.map(one, statuses)))
+
+
 @app.get("/api/overview")
 def overview_stats(site: str | None = None):
     """Everything the stat tiles need in one call."""
-    counts = {}
-    try:
-        for status in ("publish", "future", "draft", "pending"):
-            counts[status] = len(wp_api.posts(status, 50, site=site))
-    except RuntimeError:
-        counts = {s: None for s in ("publish", "future", "draft", "pending")}
+    lists = _posts_by_status(("publish", "future", "draft", "pending"), site)
+    counts = {s: (len(v) if v is not None else None) for s, v in lists.items()}
     today = store.now()[:10]
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()[:10]
-    published = []
-    try:
-        published = wp_api.posts("publish", 50, site=site)
-    except RuntimeError:
-        pass
+    published = lists["publish"] or []
     return {
         **store.metrics(site=site or sites.default_id()),
-        "posts_total": sum(v for v in counts.values() if v) if any(counts.values()) else None,
+        "posts_total": None if all(v is None for v in counts.values())
+        else sum(v or 0 for v in counts.values()),
         "published": counts["publish"],
         "published_today": sum(1 for p in published if (p["date_gmt"] or "").startswith(today)),
         "published_week": sum(1 for p in published if (p["date_gmt"] or "")[:10] >= week_ago),
@@ -786,16 +794,18 @@ def notifications(site: str | None = None):
             items.append({"ts": run["ended_at"], "level": "error",
                           "text": f"{run['job_id']} #{run['id']} {run['status']}: {run['error']}"})
     try:
-        for p in wp_api.posts("pending", 10, site=site):
+        # limit 50 on purpose: shares the cache entry overview/pipeline already keep warm
+        for p in wp_api.posts("pending", 50, site=site)[:10]:
             items.append({"ts": p["modified_gmt"], "level": "approval",
                           "text": f"Awaiting approval: {p['title']}"})
         today = store.now()[:10]
-        for p in wp_api.posts("publish", 10, site=site):
+        for p in wp_api.posts("publish", 50, site=site)[:10]:
             if (p["date_gmt"] or "").startswith(today):
                 items.append({"ts": p["date_gmt"], "level": "success",
                               "text": f"Published: {p['title']}"})
     except RuntimeError:
         pass
+    items.sort(key=lambda i: i["ts"] or "￿", reverse=True)  # newest first, ts-less alerts on top
     return items[:30]
 
 
@@ -805,12 +815,8 @@ def pipeline(site: str | None = None):
     from core import topics as topic_engine
 
     queued = [t["title"] for t in topic_engine.listing("approved", site)]
-    counts = {}
-    for status in ("draft", "pending", "future", "publish"):
-        try:
-            counts[status] = wp_api.posts(status, 50, site=site)
-        except RuntimeError:
-            counts[status] = []
+    lists = _posts_by_status(("draft", "pending", "future", "publish"), site)
+    counts = {s: (v or []) for s, v in lists.items()}
     return {
         "idea": queued,
         "generated": counts["draft"],

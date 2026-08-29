@@ -20,15 +20,37 @@ EDITABLE_FIELDS = ("title", "content", "excerpt", "slug", "status", "date_gmt",
                    "categories", "tags", "featured_media", "author")
 
 
+_refreshing = set()
+
+
 def _cached(key, fetch):
+    """Stale-while-revalidate: expired entries are served instantly and refreshed
+    in a background thread, so dashboard polling never blocks on WordPress."""
     with _lock:
         hit = _cache.get(key)
-        if hit and time.time() - hit[0] < _TTL_SECONDS:
-            return hit[1]
+        if hit:
+            if time.time() - hit[0] < _TTL_SECONDS:
+                return hit[1]
+            if key not in _refreshing:
+                _refreshing.add(key)
+                threading.Thread(target=_refresh, args=(key, fetch), daemon=True).start()
+            return hit[1]  # stale but instant; fresh value lands on the next poll
     value = fetch()
     with _lock:
         _cache[key] = (time.time(), value)
     return value
+
+
+def _refresh(key, fetch):
+    try:
+        value = fetch()
+        with _lock:
+            _cache[key] = (time.time(), value)
+    except Exception:
+        pass  # keep serving the stale value; next expiry retries
+    finally:
+        with _lock:
+            _refreshing.discard(key)
 
 
 def invalidate():
