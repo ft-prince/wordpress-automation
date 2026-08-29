@@ -44,7 +44,7 @@ export const logoutServer = () =>
 
 export const api = {
   // automations
-  jobs: () => authedFetch('/api/jobs'),
+  jobs: () => authedFetch('/api/jobs' + sq()),
   job: (id) => authedFetch(`/api/jobs/${id}`),
   createJob: (body) => send('/api/jobs', 'POST', body),
   patch: (id, body) => send(`/api/jobs/${id}`, 'PATCH', body),
@@ -54,11 +54,11 @@ export const api = {
   run: (id, dryRun = false) => send(`/api/jobs/${id}/run`, 'POST', { dry_run: dryRun }),
   stop: (runId) => send(`/api/runs/${runId}/stop`, 'POST'),
   retry: (runId) => send(`/api/runs/${runId}/retry`, 'POST'),
-  runs: (params = {}) => authedFetch('/api/runs?' + new URLSearchParams(params)),
+  runs: (params = {}) => authedFetch('/api/runs?' + new URLSearchParams(site.current() ? { ...params, site: site.current() } : params)),
   logs: (runId) => authedFetch(`/api/runs/${runId}/logs`),
   // system
   overview: () => authedFetch('/api/overview' + sq()),
-  metrics: () => authedFetch('/api/metrics'),
+  metrics: () => authedFetch('/api/metrics' + sq()),
   health: () => authedFetch('/api/health' + sq()),
   alerts: () => authedFetch('/api/alerts' + sq()),
   notifications: () => authedFetch('/api/notifications' + sq()),

@@ -31,10 +31,20 @@ def _command(job, dry_run, extra_args=None):
     return cmd
 
 
+def _job_site(job, extra_args=None):
+    """Which site this run targets: explicit override, job config, or the default."""
+    from core import sites
+
+    return ((extra_args or {}).get("site")
+            or (job.get("args") or {}).get("site")
+            or sites.default_id() or "")
+
+
 def execute(job_id, trigger="manual", dry_run=False, extra_args=None):
     """Run a job to completion. Returns the finished run row. Never raises to the caller."""
     job = registry.get(job_id)
-    run_id = store.start_run(job_id, trigger=trigger, dry_run=dry_run)
+    run_id = store.start_run(job_id, trigger=trigger, dry_run=dry_run,
+                             site=_job_site(job, extra_args))
     timeout = job.get("timeout_seconds") or DEFAULT_TIMEOUT
     cmd = _command(job, dry_run, extra_args)
     store.add_log(run_id, f"$ {' '.join(cmd)}", "system")

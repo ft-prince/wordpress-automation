@@ -65,13 +65,19 @@ def _rows(sql, params=()):
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
+def _resolve(site):
+    """Every query runs against a concrete site. No shared bucket."""
+    return site or sites.default_id() or ""
+
+
 def listing(status=None, site=None):
+    site = _resolve(site)
     where, params = [], []
     if status:
         where.append("status=?")
         params.append(status)
     if site:
-        where.append("(site=? OR site='')")
+        where.append("site=?")
         params.append(site)
     clause = ("WHERE " + " AND ".join(where)) if where else ""
     order = "position, id" if status == "approved" else "relevance DESC, id DESC"
@@ -79,13 +85,14 @@ def listing(status=None, site=None):
 
 
 def add(title, source="manual", category="", relevance=50, why="", site="", status="suggested"):
+    site = _resolve(site)
     title = (title or "").strip()
     if not title:
         raise ValueError("title is required")
     if status not in STATUSES:
         raise ValueError(f"bad status: {status}")
     # Never re-suggest something already known under any status.
-    existing = _rows("SELECT id FROM topics WHERE lower(title)=?", (title.lower(),))
+    existing = _rows("SELECT id FROM topics WHERE lower(title)=? AND site=?", (title.lower(), site))
     if existing:
         return None
     with _conn() as conn:
@@ -155,14 +162,13 @@ def next_approved(site=None):
 def claim_next(site=None):
     """Atomically take the next queued topic so two runs can never write the same one.
     Returns the claimed topic or None. Call release() if the run fails."""
+    site = _resolve(site)
     with _conn() as conn:
-        params = (site, site) if site else ()
-        where = "(site=? OR site='')" if site else "1=1"
         row = conn.execute(
-            f"UPDATE topics SET status='writing' WHERE id = ("
-            f"  SELECT id FROM topics WHERE status='approved' AND {where}"
-            f"  ORDER BY position, id LIMIT 1) RETURNING *",
-            params[:1] if site else (),
+            "UPDATE topics SET status='writing' WHERE id = ("
+            "  SELECT id FROM topics WHERE status='approved' AND site=?"
+            "  ORDER BY position, id LIMIT 1) RETURNING *",
+            (site,),
         ).fetchone()
         return dict(row) if row else None
 
@@ -273,7 +279,7 @@ def discover(site=None, per_source=4):
     created = []
     for batch in batches:
         for c in batch:
-            new_id = add(site=site or "", status="suggested", **c)
+            new_id = add(site=_resolve(site), status="suggested", **c)
             if new_id:
                 created.append({**c, "id": new_id})
     store.add_audit("discovery", "topics-discovered", site or "default",

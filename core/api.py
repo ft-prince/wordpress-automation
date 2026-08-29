@@ -153,6 +153,10 @@ class SecretValue(BaseModel):
     value: str
 
 
+def _job_site(job):
+    return (job.get("args") or {}).get("site") or sites.default_id() or ""
+
+
 def _decorate(job):
     """Registry entry + live state. The registry stays the source of truth."""
     last = store.last_run(job["id"])
@@ -163,6 +167,7 @@ def _decorate(job):
             current_step = lines[-1]["line"][:120]
     return {
         **job,
+        "target_site": _job_site(job),
         "last_run": last,
         "next_run": scheduler.next_run(job["id"]),
         "status": (last or {}).get("status", "never"),
@@ -171,8 +176,11 @@ def _decorate(job):
 
 
 @app.get("/api/jobs")
-def list_jobs():
-    return [_decorate(j) for j in registry.all_jobs()]
+def list_jobs(site: str | None = None):
+    jobs = [_decorate(j) for j in registry.all_jobs()]
+    if site:
+        jobs = [j for j in jobs if j["target_site"] == site]
+    return jobs
 
 
 @app.get("/api/jobs/{job_id}")
@@ -263,7 +271,7 @@ def overview_stats(site: str | None = None):
     except RuntimeError:
         pass
     return {
-        **store.metrics(),
+        **store.metrics(site=site or sites.default_id()),
         "posts_total": sum(v for v in counts.values() if v) if any(counts.values()) else None,
         "published": counts["publish"],
         "published_today": sum(1 for p in published if (p["date_gmt"] or "").startswith(today)),
@@ -282,8 +290,9 @@ def stop_run(run_id: int):
 
 
 @app.get("/api/runs")
-def list_runs(job: str | None = None, status: str | None = None, limit: int = 50, offset: int = 0):
-    return store.runs(job_id=job, status=status, limit=min(limit, 200), offset=offset)
+def list_runs(job: str | None = None, status: str | None = None, limit: int = 50,
+              offset: int = 0, site: str | None = None):
+    return store.runs(job_id=job, status=status, limit=min(limit, 200), offset=offset, site=site)
 
 
 @app.get("/api/runs/{run_id}/logs")
@@ -316,13 +325,13 @@ async def stream_logs(websocket: WebSocket, run_id: int):
 
 
 @app.get("/api/metrics")
-def metrics():
-    jobs = registry.all_jobs()
+def metrics(site: str | None = None):
+    jobs = [j for j in registry.all_jobs() if not site or _job_site(j) == site]
     return {
-        **store.metrics(),
+        **store.metrics(site=site),
         "jobs_total": len(jobs),
         "jobs_enabled": sum(1 for j in jobs if j.get("enabled", True)),
-        "heatmap": store.heatmap(),
+        "heatmap": store.heatmap(site=site),
     }
 
 
@@ -613,12 +622,12 @@ def list_topics(status: str | None = None, site: str | None = None):
 
 
 @app.post("/api/topics")
-def create_topic(body: TopicCreate):
+def create_topic(body: TopicCreate, site: str | None = None):
     from core import topics
 
     try:
         new_id = topics.add(body.title, source="manual", category=body.category,
-                            site=body.site, status=body.status, why="added by hand")
+                            site=body.site or site or "", status=body.status, why="added by hand")
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     if new_id is None:
@@ -698,7 +707,7 @@ def generate_featured(post_id: int, body: ImageGen | None = None,
 def notifications(site: str | None = None):
     """Alert center: failures + approvals + today's publishes, newest first."""
     items = [{"ts": None, "level": a["level"], "text": a["text"]} for a in alerts(site)]
-    for run in store.runs(limit=15):
+    for run in store.runs(limit=15, site=site or sites.default_id()):
         if run["status"] in ("failed", "timeout"):
             items.append({"ts": run["ended_at"], "level": "error",
                           "text": f"{run['job_id']} #{run['id']} {run['status']}: {run['error']}"})
@@ -745,13 +754,14 @@ def alerts(site: str | None = None):
     health = wp_api.health(site)
     if not health["connected"]:
         items.append({"level": "critical", "text": f"WordPress connection lost: {health['error']}"})
-    for run in store.runs(status="failed", limit=5):
+    scope = site or sites.default_id()
+    for run in store.runs(status="failed", limit=5, site=scope):
         if run["started_at"] > store.now()[:10]:  # today only
             items.append({"level": "error", "text": f"{run['job_id']} run #{run['id']} failed: {run['error']}"})
-    for run in store.runs(status="timeout", limit=3):
+    for run in store.runs(status="timeout", limit=3, site=scope):
         items.append({"level": "error", "text": f"{run['job_id']} run #{run['id']} timed out"})
     for job in registry.all_jobs():
-        if job.get("enabled", True) is False:
+        if job.get("enabled", True) is False and _job_site(job) == scope:
             items.append({"level": "warn", "text": f"job '{job['name']}' is disabled"})
     try:
         for post in wp_api.posts("future", 20, site=site):
@@ -782,7 +792,7 @@ def system_health(site: str | None = None):
         db_ok = True
     except Exception:
         db_ok = False
-    last_success = store.runs(status="success", limit=1)
+    last_success = store.runs(status="success", limit=1, site=site or sites.default_id())
     return {
         "wp": wp_api.health(site),
         "scheduler_running": scheduler._scheduler.running,

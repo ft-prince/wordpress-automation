@@ -82,7 +82,10 @@ export default function Jobs({ onOpenJob, notify }) {
                   <td className="px-4 py-3"><Badge status={j.enabled === false ? 'paused' : j.status} /></td>
                   <td className="px-4 py-3">
                     <button onClick={() => onOpenJob(j.id)} className="font-medium underline-offset-2 hover:underline">{j.name}</button>
-                    <div className="flex gap-1.5 mt-0.5">{(j.tags || []).map((t) => <Tag key={t} name={t} />)}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {j.target_site && <span className="rounded-full border border-edge px-2 py-0.5 text-xs text-dim">→ {j.target_site}</span>}
+                      {(j.tags || []).map((t) => <Tag key={t} name={t} />)}
+                    </div>
                     {j.current_step && <div className="mt-1 text-xs text-dim mono truncate max-w-64">→ {j.current_step}</div>}
                     {['failed', 'timeout'].includes(j.status) && j.last_run?.error && (
                       <div className="mt-1 text-xs mono" style={{ color: 'var(--color-bad)' }}>{j.last_run.error}</div>

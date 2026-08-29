@@ -43,7 +43,7 @@ function SiteSwitcher({ version, onChange }) {
   )
 }
 
-function Bell({ onNavigate }) {
+function Bell({ onNavigate, version }) {
   const [items, setItems] = useState([])
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -51,7 +51,7 @@ function Bell({ onNavigate }) {
     load()
     const t = setInterval(load, 10000)
     return () => clearInterval(t)
-  }, [])
+  }, [version])
   const urgent = items.filter((i) => ['critical', 'error', 'warn', 'approval'].includes(i.level)).length
   const tone = { critical: 'var(--color-bad)', error: 'var(--color-bad)', warn: 'var(--color-accent)', approval: 'var(--color-accent)', success: 'var(--color-ok)' }
   return (
@@ -239,7 +239,7 @@ export default function App() {
             <h2 className="text-base font-bold capitalize">{page === 'job' ? 'Automation detail' : page}</h2>
             <div className="ml-auto flex items-center gap-3">
               <SiteSwitcher version={siteVersion} onChange={onSiteChange} />
-              <Bell onNavigate={navigate} />
+              <Bell onNavigate={navigate} version={siteVersion} />
             </div>
           </div>
         </header>

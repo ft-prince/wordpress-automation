@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS runs (
   exit_code  INTEGER,
   dry_run    INTEGER NOT NULL DEFAULT 0,
   trigger    TEXT NOT NULL DEFAULT 'manual',
+  site       TEXT NOT NULL DEFAULT '',
   error      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_runs_job ON runs(job_id, id DESC);
@@ -57,6 +58,9 @@ def connect():
 def init():
     with connect() as conn:
         conn.executescript(SCHEMA)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(runs)")]
+        if "site" not in cols:
+            conn.execute("ALTER TABLE runs ADD COLUMN site TEXT NOT NULL DEFAULT ''")
 
 
 def _rows(sql, params=()):
@@ -64,11 +68,11 @@ def _rows(sql, params=()):
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
-def start_run(job_id, trigger="manual", dry_run=False):
+def start_run(job_id, trigger="manual", dry_run=False, site=""):
     with connect() as conn:
         cur = conn.execute(
-            "INSERT INTO runs (job_id,status,started_at,dry_run,trigger) VALUES (?,'running',?,?,?)",
-            (job_id, now(), int(dry_run), trigger),
+            "INSERT INTO runs (job_id,status,started_at,dry_run,trigger,site) VALUES (?,'running',?,?,?,?)",
+            (job_id, now(), int(dry_run), trigger, site or ""),
         )
         return cur.lastrowid
 
@@ -98,7 +102,7 @@ def run(run_id):
     return rows[0] if rows else None
 
 
-def runs(job_id=None, status=None, limit=50, offset=0):
+def runs(job_id=None, status=None, limit=50, offset=0, site=None):
     where, params = [], []
     if job_id:
         where.append("job_id=?")
@@ -106,6 +110,9 @@ def runs(job_id=None, status=None, limit=50, offset=0):
     if status:
         where.append("status=?")
         params.append(status)
+    if site:
+        where.append("site=?")
+        params.append(site)
     clause = ("WHERE " + " AND ".join(where)) if where else ""
     params += [limit, offset]
     return _rows(f"SELECT * FROM runs {clause} ORDER BY id DESC LIMIT ? OFFSET ?", params)
@@ -148,39 +155,41 @@ def add_audit(actor, action, target, before=None, after=None):
         )
 
 
-def metrics():
+def metrics(site=None):
+    scope = " AND site=?" if site else ""
+    sp = (site,) if site else ()
     with connect() as conn:
         def scalar(sql, params=()):
             return conn.execute(sql, params).fetchone()[0] or 0
 
-        total = scalar("SELECT COUNT(*) FROM runs")
-        done = scalar("SELECT COUNT(*) FROM runs WHERE status IN ('success','failed','timeout')")
-        ok = scalar("SELECT COUNT(*) FROM runs WHERE status='success'")
+        total = scalar(f"SELECT COUNT(*) FROM runs WHERE 1=1{scope}", sp)
+        done = scalar(f"SELECT COUNT(*) FROM runs WHERE status IN ('success','failed','timeout'){scope}", sp)
+        ok = scalar(f"SELECT COUNT(*) FROM runs WHERE status='success'{scope}", sp)
         return {
             "runs_total": total,
-            "running_now": scalar("SELECT COUNT(*) FROM runs WHERE status='running'"),
+            "running_now": scalar(f"SELECT COUNT(*) FROM runs WHERE status='running'{scope}", sp),
             "failed_24h": scalar(
-                "SELECT COUNT(*) FROM runs WHERE status IN ('failed','timeout') "
-                "AND started_at > datetime('now','-1 day')"
-            ),
+                f"SELECT COUNT(*) FROM runs WHERE status IN ('failed','timeout') "
+                f"AND started_at > datetime('now','-1 day'){scope}", sp),
             "failed_7d": scalar(
-                "SELECT COUNT(*) FROM runs WHERE status IN ('failed','timeout') "
-                "AND started_at > datetime('now','-7 day')"
-            ),
+                f"SELECT COUNT(*) FROM runs WHERE status IN ('failed','timeout') "
+                f"AND started_at > datetime('now','-7 day'){scope}", sp),
             "success_rate": round(ok / done * 100) if done else None,
-            "avg_duration_ms": round(scalar("SELECT AVG(duration_ms) FROM runs WHERE status='success'")),
+            "avg_duration_ms": round(scalar(f"SELECT AVG(duration_ms) FROM runs WHERE status='success'{scope}", sp)),
         }
 
 
-def heatmap(days=7):
+def heatmap(days=7, site=None):
     """One cell per job per day: worst outcome that day wins."""
+    scope = " AND site=?" if site else ""
+    params = [f"-{days} day"] + ([site] if site else [])
     return _rows(
         "SELECT job_id, date(started_at) AS day, "
         "  SUM(status='success') AS ok, "
         "  SUM(status IN ('failed','timeout')) AS bad "
-        "FROM runs WHERE started_at > datetime('now', ?) "
+        f"FROM runs WHERE started_at > datetime('now', ?){scope} "
         "GROUP BY job_id, day ORDER BY day",
-        (f"-{days} day",),
+        params,
     )
 
 
