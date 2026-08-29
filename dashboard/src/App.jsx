@@ -148,12 +148,14 @@ const PAGES = ['overview', 'topics', 'posts', 'automations', 'schedule', 'logs',
 function pathToState() {
   const parts = window.location.pathname.split('/').filter(Boolean)
   if (parts[0] === 'automations' && parts[1]) return { page: 'job', jobId: parts[1] }
+  if (parts[0] === 'posts' && parts[1]) return { page: 'posts', jobId: parts[1] }
   if (PAGES.includes(parts[0])) return { page: parts[0], jobId: null }
   return { page: 'overview', jobId: null }
 }
 
 function stateToPath(page, jobId) {
   if (page === 'job' && jobId) return `/automations/${jobId}`
+  if (page === 'posts' && jobId) return `/posts/${jobId}`
   return page === 'overview' ? '/overview' : `/${page}`
 }
 
@@ -246,7 +248,7 @@ export default function App() {
         <main className="p-6" key={siteVersion}>
           {page === 'overview' && <Overview onNavigate={navigate} notify={notify} />}
           {page === 'topics' && <Topics notify={notify} />}
-          {page === 'posts' && <Posts notify={notify} />}
+          {page === 'posts' && <Posts notify={notify} initialEdit={jobId} />}
           {page === 'automations' && <Jobs onOpenJob={(id) => navigate('automations', id)} notify={notify} />}
           {page === 'job' && jobId && <JobDetail jobId={jobId} onBack={() => navigate('automations')} notify={notify} />}
           {page === 'schedule' && <Schedule notify={notify} />}

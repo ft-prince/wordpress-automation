@@ -176,14 +176,14 @@ function PostEditor({ postId, terms, notify, onClose, onSaved }) {
 }
 
 // ── Posts page ─────────────────────────────────────────────────────────────
-export default function Posts({ notify }) {
+export default function Posts({ notify, initialEdit }) {
   const [tab, setTab] = useState('publish')
   const [posts, setPosts] = useState(null)
   const [counts, setCounts] = useState({})
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
   const [selected, setSelected] = useState(new Set())
-  const [editing, setEditing] = useState(null)
+  const [editing, setEditing] = useState(initialEdit ? Number(initialEdit) : null)
   const [terms, setTerms] = useState({ categories: [], tags: [] })
   const [error, setError] = useState(null)
 

@@ -63,7 +63,9 @@ function Issue({ item, issue, notify, reload, onEdit }) {
             </button>
           )
         ) : (
-          <button className={btnGhost} onClick={onEdit}>Edit post</button>
+          <button className={btnGhost} onClick={onEdit}>
+            {item.type === 'post' ? 'Edit post' : 'Edit page'}
+          </button>
         )}
       </div>
     </div>
@@ -142,7 +144,12 @@ export default function Seo({ notify, onNavigate }) {
             <div className="space-y-2">
               {r.issues.map((issue) => (
                 <Issue key={issue.code} item={r} issue={issue} notify={notify}
-                  reload={() => load(false)} onEdit={() => onNavigate('posts')} />
+                  reload={() => load(false)}
+                  onEdit={() => {
+                    if (r.type === 'post') { onNavigate('posts', r.id); return }
+                    const origin = r.link ? new URL(r.link).origin : ''
+                    window.open(`${origin}/wp-admin/post.php?post=${r.id}&action=edit`, '_blank')
+                  }} />
               ))}
             </div>
           )}
