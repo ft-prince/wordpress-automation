@@ -211,6 +211,56 @@ def set_featured_from_url(post_id, image_url, site=None):
     return {**result, "media_id": media["id"]}
 
 
+SAFE_BASE = ("posts", "pages", "solution")
+
+
+def get_item(base, item_id, site=None):
+    """Any content type, one editable payload for the universal editor."""
+    if base not in SAFE_BASE:
+        raise ValueError(f"unsupported type: {base}")
+    env = sites.env_for(site)
+    p = wp.call(f"/{base}/{int(item_id)}?context=edit", env=env)
+    content_raw = (p.get("content") or {}).get("raw", "")
+    word_count = len(content_raw.split())
+    return {
+        "id": p["id"],
+        "base": base,
+        "title": (p.get("title") or {}).get("raw", "") or (p.get("title") or {}).get("rendered", ""),
+        "slug": p.get("slug", ""),
+        "status": p.get("status"),
+        "link": p.get("link"),
+        "content_raw": content_raw,
+        # Empty content on a live page means a builder or theme template owns the layout.
+        "builder_managed": word_count < 20 and p.get("status") == "publish",
+        "supports_excerpt": "excerpt" in p,
+        "excerpt_raw": ((p.get("excerpt") or {}).get("raw", "") if "excerpt" in p else ""),
+        "meta_desc": ((p.get("meta") or {}).get("servelens_seo_desc") or ""),
+        "edit_url": f"{env['WEBSITE_LINK'].rstrip('/')}/wp-admin/post.php?post={p['id']}&action=edit",
+    }
+
+
+ITEM_FIELDS = ("title", "content", "excerpt", "slug", "status", "meta_desc")
+
+
+def update_item(base, item_id, fields, site=None):
+    if base not in SAFE_BASE:
+        raise ValueError(f"unsupported type: {base}")
+    rejected = [k for k in fields if k not in ITEM_FIELDS]
+    if rejected:
+        raise ValueError(f"not editable: {', '.join(rejected)}")
+    env = sites.env_for(site)
+    payload = {k: v for k, v in fields.items() if k != "meta_desc"}
+    if "meta_desc" in fields:
+        payload["meta"] = {"servelens_seo_desc": fields["meta_desc"]}
+    result = wp.call(f"/{base}/{int(item_id)}?context=edit", payload, method="POST", env=env)
+    if "meta_desc" in fields:
+        saved = (result.get("meta") or {}).get("servelens_seo_desc", "")
+        if saved != fields["meta_desc"]:
+            raise RuntimeError("WordPress ignored the description field. Upload servelens-seo.php v1.1 to mu-plugins first")
+    invalidate()
+    return {"id": result["id"], "saved": True}
+
+
 def bulk(ids, action, value=None, site=None):
     """Apply one action to many posts. Per-post errors don't stop the batch."""
     results = []

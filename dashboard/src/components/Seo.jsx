@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { api, site } from '../api'
 import { Badge, btnGhost, btnPrimary, Empty, Spinner } from './bits'
+import ItemEditor from './ItemEditor'
 
 const scoreTone = (s) => (s >= 80 ? 'var(--color-ok)' : s >= 50 ? 'var(--color-accent)' : 'var(--color-bad)')
 
@@ -77,6 +78,7 @@ export default function Seo({ notify, onNavigate }) {
   const [error, setError] = useState(null)
 
   const [running, setRunning] = useState(false)
+  const [editItem, setEditItem] = useState(null)
   const load = (force = false) => {
     if (force) setRunning(true)
     return seoFetch(force)
@@ -147,14 +149,18 @@ export default function Seo({ notify, onNavigate }) {
                   reload={() => load(false)}
                   onEdit={() => {
                     if (r.type === 'post') { onNavigate('posts', r.id); return }
-                    const origin = r.link ? new URL(r.link).origin : ''
-                    window.open(`${origin}/wp-admin/post.php?post=${r.id}&action=edit`, '_blank')
+                    setEditItem({ base: r.base, id: r.id })
                   }} />
               ))}
             </div>
           )}
         </section>
       ))}
+
+      {editItem && (
+        <ItemEditor base={editItem.base} itemId={editItem.id} notify={notify}
+          onClose={() => setEditItem(null)} onSaved={() => load(false)} />
+      )}
     </div>
   )
 }

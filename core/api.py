@@ -472,6 +472,31 @@ def wp_bulk(body: BulkRequest, site: str | None = None):
     return {"results": results, "ok": ok, "failed": len(results) - ok}
 
 
+class ItemFields(BaseModel):
+    title: str | None = None
+    content: str | None = None
+    excerpt: str | None = None
+    slug: str | None = None
+    status: str | None = None
+    meta_desc: str | None = None
+
+
+@app.get("/api/wp/items/{base}/{item_id}")
+def wp_item(base: str, item_id: int, site: str | None = None):
+    return _wp_guard(wp_api.get_item, base, item_id, site=site)
+
+
+@app.patch("/api/wp/items/{base}/{item_id}")
+def wp_item_update(base: str, item_id: int, body: ItemFields, site: str | None = None):
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not fields:
+        raise HTTPException(400, "nothing to change")
+    result = _wp_guard(wp_api.update_item, base, item_id, fields, site=site)
+    store.add_audit("dashboard", "item-update", f"{base}:{item_id}", None, {"fields": list(fields)})
+    from core import seo as seo_mod
+    return result
+
+
 class GenerateRequest(BaseModel):
     topic: str
     words: int = 800
