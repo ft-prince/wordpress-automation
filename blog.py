@@ -67,13 +67,24 @@ def run(status="draft", dry_run=False, site=None, policy=None, category=None):
         env = {**wp.load_env(), **site_registry.env_for(site)}
         print(f"site: {site} ({env['WEBSITE_LINK']})")
 
-    topic = topics.next_approved(site)
+    topic = topics.claim_next(site)
     if not topic:
         print(f"topic queue is empty. Approve topics on the dashboard "
               f"({topics.queue_depth(site)} queued)")
         return 0
 
     print(f"topic #{topic['id']}: {topic['title']}  (source: {topic['source']})")
+    try:
+        return _write_and_publish(topic, status, dry_run, site, policy, category, env)
+    except Exception:
+        topics.release(topic["id"])   # failed run returns the topic to the queue
+        raise
+
+
+def _write_and_publish(topic, status, dry_run, site, policy, category, env):
+    import gen
+    from core import images, topics
+
     link_env = env or wp.load_env()
     title, meta, html, keywords = gen.write_full(topic["title"], env=env,
                                                 site_pages=_site_pages(link_env))
@@ -99,7 +110,8 @@ def run(status="draft", dry_run=False, site=None, policy=None, category=None):
     post = wp.publish(title, html, status=status, dry_run=dry_run, excerpt=meta,
                       categories=categories, env=env)
     if dry_run:
-        print("dry run — nothing sent to WordPress")
+        topics.release(topic["id"])
+        print("dry run, nothing sent to WordPress")
         return 0
 
     topics.mark_written(topic["id"], post_id=post["id"])

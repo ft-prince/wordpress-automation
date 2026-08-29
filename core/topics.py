@@ -11,7 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEGACY_TOPICS = os.path.join(ROOT, "topics.txt")
 LEGACY_DONE = os.path.join(ROOT, "posted.txt")
 
-STATUSES = ("suggested", "approved", "rejected", "written")
+STATUSES = ("suggested", "approved", "rejected", "writing", "written")
 SOURCES = ("site-gap", "serp", "trending", "cluster", "manual")
 LOW_QUEUE_THRESHOLD = 2
 
@@ -150,6 +150,27 @@ def next_approved(site=None):
     """What blog.py writes next: first queued topic for this site (or unassigned)."""
     rows = listing(status="approved", site=site)
     return rows[0] if rows else None
+
+
+def claim_next(site=None):
+    """Atomically take the next queued topic so two runs can never write the same one.
+    Returns the claimed topic or None. Call release() if the run fails."""
+    with _conn() as conn:
+        params = (site, site) if site else ()
+        where = "(site=? OR site='')" if site else "1=1"
+        row = conn.execute(
+            f"UPDATE topics SET status='writing' WHERE id = ("
+            f"  SELECT id FROM topics WHERE status='approved' AND {where}"
+            f"  ORDER BY position, id LIMIT 1) RETURNING *",
+            params[:1] if site else (),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def release(topic_id):
+    """A failed run puts its topic back in the queue."""
+    with _conn() as conn:
+        conn.execute("UPDATE topics SET status='approved' WHERE id=? AND status='writing'", (topic_id,))
 
 
 def mark_written(topic_id, post_id=None):

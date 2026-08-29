@@ -1,6 +1,6 @@
 // WordPress posts: full CRUD. Status tabs, search, bulk bar, editor drawer with AI generate.
 import { useEffect, useMemo, useState } from 'react'
-import { api } from '../api'
+import { api, site } from '../api'
 import { Badge, btnGhost, btnPrimary, CopyBtn, Empty, field, fmtTime, Modal, Spinner } from './bits'
 import RichEditor, { SeoPanel } from './RichEditor'
 import SeoChip from './SeoChip'
@@ -140,7 +140,7 @@ function PostEditor({ postId, terms, notify, onClose, onSaved }) {
             {!isNew && (
               <button type="button" className={btnGhost} disabled={busy === 'image'} onClick={() => {
                 setBusy('image')
-                fetch(`/api/wp/posts/${postId}/featured/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Token': localStorage.getItem('dash_token') || '' }, body: JSON.stringify({}) })
+                fetch(`/api/wp/posts/${postId}/featured/generate${site.current() ? `?site=${site.current()}` : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Token': localStorage.getItem('dash_token') || '' }, body: JSON.stringify({}) })
                   .then((r) => (r.ok ? r.json() : r.json().then((b) => Promise.reject(new Error(b.detail)))))
                   .then(() => { notify('AI image generated & attached'); api.post(postId).then(setForm) })
                   .catch((e) => notify(e.message, true))

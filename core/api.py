@@ -219,14 +219,18 @@ def put_source(job_id: str, payload: Source):
 
 
 @app.post("/api/jobs/{job_id}/run")
-def run_now(job_id: str, body: RunRequest | None = None):
+def run_now(job_id: str, body: RunRequest | None = None, site: str | None = None):
     try:
         registry.get(job_id)
     except (KeyError, ValueError):
         raise HTTPException(404, "no such job")
+    last = store.last_run(job_id)
+    if last and last["status"] == "running":
+        raise HTTPException(409, "this automation is already running, check Logs")
     dry = bool(body and body.dry_run)
-    runner.execute_async(job_id, trigger="manual", dry_run=dry)
-    return {"started": True, "dry_run": dry}
+    extra = {"site": site} if site else None
+    runner.execute_async(job_id, trigger="manual", dry_run=dry, extra_args=extra)
+    return {"started": True, "dry_run": dry, "site": site}
 
 
 @app.post("/api/runs/{run_id}/retry")
@@ -535,7 +539,10 @@ def seo_audit(force: bool = False, site: str | None = None):
     from core import seo
 
     try:
-        return seo.audit(force=force, site=site)
+        if force:
+            return seo.audit(force=True, site=site)
+        saved = seo.saved_audit(site)
+        return saved if saved is not None else {"summary": None, "results": [], "generated_at": None}
     except RuntimeError as exc:
         raise HTTPException(502, str(exc))
 

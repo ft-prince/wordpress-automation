@@ -7,9 +7,26 @@ import time
 import wp
 from core import sites, wp_api
 
-_TTL_SECONDS = 120
-_cache = {}
+import json as _json
+import os as _os
+
+_STORE_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "seo_audits.json")
 _lock = threading.Lock()
+
+
+def _load_store():
+    if not _os.path.exists(_STORE_PATH):
+        return {}
+    try:
+        with open(_STORE_PATH) as fh:
+            return _json.load(fh)
+    except Exception:
+        return {}
+
+
+def _save_store(store):
+    with open(_STORE_PATH, "w") as fh:
+        _json.dump(store, fh)
 
 META_MIN, META_MAX = 100, 160
 TITLE_MIN, TITLE_MAX = 25, 65
@@ -180,13 +197,22 @@ def _audit_item(item, ptype):
     }
 
 
+def saved_audit(site=None):
+    """The last saved audit for this site, or None. Never crawls, never calls a model."""
+    env = sites.env_for(site)
+    entry = _load_store().get(env["_site_id"])
+    if not entry:
+        return None
+    return {"generated_at": entry["at"], **entry["data"]}
+
+
 def audit(force=False, site=None):
     env = sites.env_for(site)
     cache_key = env["_site_id"]
-    with _lock:
-        hit = _cache.get(cache_key)
-        if not force and hit and time.time() - hit["at"] < _TTL_SECONDS:
-            return hit["data"]
+    if not force:
+        saved = saved_audit(site)
+        if saved is not None:
+            return saved
 
     from concurrent.futures import ThreadPoolExecutor
 
@@ -215,23 +241,50 @@ def audit(force=False, site=None):
         "fixable": sum(1 for r in results for i in r["issues"] if i["fix"]),
     }
     data = {"summary": summary, "results": results}
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     with _lock:
-        _cache[cache_key] = {"at": time.time(), "data": data}
-    return data
+        store = _load_store()
+        store[cache_key] = {"at": stamp, "data": data}
+        _save_store(store)
+    return {"generated_at": stamp, **data}
 
 
 def suggest_meta(base, item_id, site=None):
-    """Generate a meta description for one item, on demand."""
+    """Generate a meta description on demand, then remember it in the saved audit
+    so revisiting the page never costs another model call."""
     if not re.match(r"^[a-z0-9-]+$", base):
         raise ValueError(f"bad rest base: {base}")
-    item = wp.call(f"/{base}/{int(item_id)}?context=edit", env=sites.env_for(site))
+    env = sites.env_for(site)
+
+    # already suggested earlier? serve the saved one
+    saved = saved_audit(site)
+    if saved:
+        for r in saved["results"]:
+            if r["id"] == int(item_id) and r["base"] == base:
+                for issue in r["issues"]:
+                    if issue.get("fix") and issue["fix"].get("value"):
+                        return {"value": issue["fix"]["value"], "cached": True}
+
+    item = wp.call(f"/{base}/{int(item_id)}?context=edit", env=env)
     title = re.sub(r"<[^>]+>", "", item.get("title", {}).get("rendered", "")) or "page"
     text = re.sub(r"<[^>]+>", " ", item.get("content", {}).get("rendered", "") or "")
     if len(text.split()) < 40 and item.get("link"):
         live = _live_page(item["link"])
         if live:
             text = live["text"]
-    return {"value": _generate_meta(title, text)}
+    value = _generate_meta(title, text)
+
+    with _lock:
+        store = _load_store()
+        entry = store.get(env["_site_id"])
+        if entry:
+            for r in entry["data"]["results"]:
+                if r["id"] == int(item_id) and r["base"] == base:
+                    for issue in r["issues"]:
+                        if issue.get("fix") and issue["fix"].get("generate"):
+                            issue["fix"]["value"] = value
+            _save_store(store)
+    return {"value": value}
 
 
 def apply_fix(base, item_id, field, value, site=None):
@@ -240,17 +293,36 @@ def apply_fix(base, item_id, field, value, site=None):
         raise ValueError(f"cannot auto-fix field: {field}")
     if not re.match(r"^[a-z0-9-]+$", base):
         raise ValueError(f"bad rest base: {base}")
+    env = sites.env_for(site)
     payload = {"meta": {"servelens_seo_desc": value}} if field == "meta_desc" else {field: value}
-    result = wp.call(f"/{base}/{int(item_id)}?context=edit", payload, method="POST", env=sites.env_for(site))
+    result = wp.call(f"/{base}/{int(item_id)}?context=edit", payload, method="POST", env=env)
     if field == "meta_desc":
-        saved = (result.get("meta") or {}).get("servelens_seo_desc", "")
-        if saved != value:
+        saved_val = (result.get("meta") or {}).get("servelens_seo_desc", "")
+        if saved_val != value:
             raise RuntimeError("WordPress ignored this field. Upload servelens-seo.php v1.1 to mu-plugins first")
     wp_api.invalidate()
-    invalidate()
+
+    # Update the saved audit in place: drop the fixed issue, bump the score.
+    with _lock:
+        store = _load_store()
+        entry = store.get(env["_site_id"])
+        if entry:
+            for r in entry["data"]["results"]:
+                if r["id"] == int(item_id) and r["base"] == base:
+                    before = len(r["issues"])
+                    r["issues"] = [i for i in r["issues"]
+                                   if not (i.get("fix") and i["fix"].get("field") == field)]
+                    total = 7 if r["type"] == "post" else 4
+                    r["score"] = round(max(total - len(r["issues"]), 0) / total * 100)
+            s_ = entry["data"]["summary"]
+            s_["with_issues"] = sum(1 for r in entry["data"]["results"] if r["issues"])
+            s_["fixable"] = sum(1 for r in entry["data"]["results"] for i in r["issues"] if i.get("fix"))
+            results = entry["data"]["results"]
+            s_["avg_score"] = round(sum(r["score"] for r in results) / len(results)) if results else 100
+            _save_store(store)
     return {"id": result["id"], "applied": field}
 
 
 def invalidate():
-    with _lock:
-        _cache.clear()
+    """Kept for callers; saved audits stay until the user re-runs one."""
+    pass

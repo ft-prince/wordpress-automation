@@ -33,7 +33,7 @@ function Issue({ item, issue, notify, reload, onEdit }) {
   const approve = () => {
     setBusy(true)
     applyFix(item, { ...issue.fix, value: suggested })
-      .then(() => { notify(`applied: ${issue.fix.label}`); reload() })
+      .then(() => { notify(`Applied: ${issue.fix.label}`); reload() })
       .catch((e) => notify(e.message, true))
       .finally(() => setBusy(false))
   }
@@ -74,7 +74,14 @@ export default function Seo({ notify, onNavigate }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 
-  const load = (force = false) => seoFetch(force).then((d) => { setData(d); setError(null) }).catch((e) => setError(e.message))
+  const [running, setRunning] = useState(false)
+  const load = (force = false) => {
+    if (force) setRunning(true)
+    return seoFetch(force)
+      .then((d) => { setData(d); setError(null) })
+      .catch((e) => setError(e.message))
+      .finally(() => setRunning(false))
+  }
   useEffect(() => { load() }, [])
 
   if (error) return (
@@ -82,9 +89,19 @@ export default function Seo({ notify, onNavigate }) {
       audit failed: {error} — <button className="underline" onClick={() => load(true)}>retry</button>
     </div>
   )
-  if (!data) return <Spinner label="Checking every page and post on your site…" />
+  if (!data) return <Spinner label={running ? 'Checking every page and post on your site…' : 'Loading saved results…'} />
 
-  const { summary, results } = data
+  const { summary, results, generated_at } = data
+
+  if (!summary) return (
+    <div className="max-w-xl rounded-xl border border-edge bg-panel p-8 text-center">
+      <p className="text-sm text-dim">No SEO check has been run for this site yet.</p>
+      <button className={`${btnPrimary} mt-4`} onClick={() => { setData(null); load(true) }}>
+        Run first audit
+      </button>
+      <p className="mt-2 text-xs text-dim">Takes about ten seconds. Results are saved, so this page loads instantly afterwards.</p>
+    </div>
+  )
   return (
     <div className="max-w-3xl space-y-5">
       <div className="flex items-center gap-4">
@@ -100,7 +117,10 @@ export default function Seo({ notify, onNavigate }) {
             </div>
           ))}
         </div>
-        <button className={btnGhost} onClick={() => { setData(null); load(true) }}>Re-audit</button>
+        <div className="text-right">
+          <button className={btnGhost} onClick={() => { setData(null); load(true) }}>Re-check</button>
+          {generated_at && <p className="mt-1 text-xs text-dim mono">checked {new Date(generated_at).toLocaleString()}</p>}
+        </div>
       </div>
 
       {results.length === 0 ? <Empty quip="Nothing to audit yet." /> : results.map((r) => (
@@ -122,7 +142,7 @@ export default function Seo({ notify, onNavigate }) {
             <div className="space-y-2">
               {r.issues.map((issue) => (
                 <Issue key={issue.code} item={r} issue={issue} notify={notify}
-                  reload={() => load(true)} onEdit={() => onNavigate('posts')} />
+                  reload={() => load(false)} onEdit={() => onNavigate('posts')} />
               ))}
             </div>
           )}

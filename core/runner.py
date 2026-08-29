@@ -14,7 +14,7 @@ _procs = {}   # run_id -> Popen, so a run can be killed from the dashboard
 _lock = threading.Lock()
 
 
-def _command(job, dry_run):
+def _command(job, dry_run, extra_args=None):
     entry = os.path.join(ROOT, job["entrypoint"])
     interpreter = {
         "python": [PYTHON if os.path.exists(PYTHON) else sys.executable],
@@ -23,19 +23,20 @@ def _command(job, dry_run):
     }[job["runtime"]]
 
     cmd = interpreter + [entry]
-    for key, value in (job.get("args") or {}).items():
+    merged = {**(job.get("args") or {}), **(extra_args or {})}
+    for key, value in merged.items():
         cmd += [f"--{key}", str(value)]
     if dry_run:
         cmd.append("--dry-run")
     return cmd
 
 
-def execute(job_id, trigger="manual", dry_run=False):
+def execute(job_id, trigger="manual", dry_run=False, extra_args=None):
     """Run a job to completion. Returns the finished run row. Never raises to the caller."""
     job = registry.get(job_id)
     run_id = store.start_run(job_id, trigger=trigger, dry_run=dry_run)
     timeout = job.get("timeout_seconds") or DEFAULT_TIMEOUT
-    cmd = _command(job, dry_run)
+    cmd = _command(job, dry_run, extra_args)
     store.add_log(run_id, f"$ {' '.join(cmd)}", "system")
 
     try:
@@ -79,13 +80,13 @@ def execute(job_id, trigger="manual", dry_run=False):
     return store.run(run_id)
 
 
-def execute_async(job_id, trigger="manual", dry_run=False):
+def execute_async(job_id, trigger="manual", dry_run=False, extra_args=None):
     """Anything over ~2 minutes must not block a request."""
     run_id_box = {}
     done = threading.Event()
 
     def target():
-        result = execute(job_id, trigger, dry_run)
+        result = execute(job_id, trigger, dry_run, extra_args)
         run_id_box["run"] = result
         done.set()
 

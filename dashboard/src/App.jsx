@@ -143,9 +143,24 @@ function Login({ onDone }) {
   )
 }
 
+const PAGES = ['overview', 'topics', 'posts', 'automations', 'schedule', 'logs', 'seo', 'sites', 'health', 'secrets', 'audit']
+
+function pathToState() {
+  const parts = window.location.pathname.split('/').filter(Boolean)
+  if (parts[0] === 'automations' && parts[1]) return { page: 'job', jobId: parts[1] }
+  if (PAGES.includes(parts[0])) return { page: parts[0], jobId: null }
+  return { page: 'overview', jobId: null }
+}
+
+function stateToPath(page, jobId) {
+  if (page === 'job' && jobId) return `/automations/${jobId}`
+  return page === 'overview' ? '/overview' : `/${page}`
+}
+
 export default function App() {
-  const [page, setPage] = useState('overview')
-  const [jobId, setJobId] = useState(null)
+  const initial = pathToState()
+  const [page, setPage] = useState(initial.page)
+  const [jobId, setJobId] = useState(initial.jobId)
   const [toasts, setToasts] = useState([])
   const [authed, setAuthed] = useState(() => Boolean(auth.token()))
 
@@ -164,7 +179,19 @@ export default function App() {
   const [siteVersion, setSiteVersion] = useState(0)
   const onSiteChange = () => setSiteVersion((v) => v + 1)
 
-  const navigate = (p, id = null) => { setJobId(id); setPage(id && p === 'automations' ? 'job' : p) }
+  const navigate = (p, id = null) => {
+    const nextPage = id && p === 'automations' ? 'job' : p
+    setJobId(id)
+    setPage(nextPage)
+    const path = stateToPath(nextPage, id)
+    if (window.location.pathname !== path) window.history.pushState({}, '', path)
+  }
+
+  useEffect(() => {
+    const onPop = () => { const s = pathToState(); setPage(s.page); setJobId(s.jobId) }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   useEffect(() => {
     const onKey = (e) => {

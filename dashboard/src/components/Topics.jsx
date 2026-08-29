@@ -62,7 +62,7 @@ export default function Topics({ notify }) {
   const writeNow = () => {
     setWriting(true)
     call('/api/jobs/publish-blog/run', 'POST', { dry_run: false })
-      .then(() => notify('Writing now. Follow along in Logs; the draft will show up in Posts'))
+      .then(() => notify(`Writing now for ${site.current() || 'the default site'}. Follow along in Logs`))
       .catch((e) => notify(e.message, true))
       .finally(() => setWriting(false))
   }
