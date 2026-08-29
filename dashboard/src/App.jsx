@@ -117,7 +117,7 @@ function Login({ onDone }) {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <form onSubmit={submit} className="w-80 rounded-xl border border-edge bg-panel p-6">
-        <h1 className="text-lg font-bold">automation<span className="text-accent">.</span></h1>
+        <h1 className="text-lg font-bold">presspilot<span className="text-accent">.</span></h1>
         <p className="mt-1 text-sm text-dim">
           {mode === 'setup' ? 'Welcome! Create your login to get started' : 'Sign in to continue'}
         </p>
@@ -212,7 +212,7 @@ export default function App() {
       {/* sidebar */}
       <aside className="sticky top-0 flex h-screen w-52 shrink-0 flex-col border-r border-edge bg-panel/50 max-md:w-14">
         <div className="px-4 py-5 max-md:px-3">
-          <h1 className="text-lg font-bold tracking-tight max-md:hidden">automation<span className="text-accent">.</span></h1>
+          <h1 className="text-lg font-bold tracking-tight max-md:hidden">presspilot<span className="text-accent">.</span></h1>
           <span className="hidden text-lg font-bold max-md:block">a<span className="text-accent">.</span></span>
         </div>
         <nav className="flex flex-col gap-0.5 px-2" aria-label="Main">

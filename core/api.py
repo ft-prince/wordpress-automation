@@ -25,7 +25,7 @@ async def lifespan(_app):
     scheduler.shutdown()
 
 
-app = FastAPI(title="Automation control plane", lifespan=lifespan)
+app = FastAPI(title="PressPilot control plane", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
