@@ -177,7 +177,7 @@ export function PublishedPosts({ notify }) {
               <tr key={p.id} className="border-t border-edge/50">
                 <td className="py-2 pr-3"><Thumb src={p.featured_image} /></td>
                 <td className="py-2 pr-3">
-                  <a href={p.link} target="_blank" rel="noreferrer" className="font-medium underline-offset-2 hover:underline">{p.title}</a>
+                  <a href={p.link} target="_blank" rel="noreferrer" className="inline-block max-w-72 truncate align-bottom font-medium underline-offset-2 hover:underline" title={p.title}>{p.title}</a>
                   <span className="ml-2"><SeoChip seo={p.seo} /></span>
                 </td>
                 <td className="py-2 pr-3 mono text-dim">{fmtTime(p.date_gmt + 'Z')}</td>

@@ -280,8 +280,8 @@ export default function Posts({ notify }) {
                 <tr key={p.id} className="border-b border-edge/50 last:border-0 hover:bg-edge/20">
                   <td className="px-3 py-2.5"><input type="checkbox" aria-label={`Select ${p.title}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} /></td>
                   <td className="px-2 py-2.5"><Thumb src={p.featured_image} /></td>
-                  <td className="px-3 py-2.5 max-w-64">
-                    <button className="truncate block font-medium underline-offset-2 hover:underline text-left" onClick={() => setEditing(p.id)} title={p.title}>{p.title}</button>
+                  <td className="px-3 py-2.5 w-72">
+                    <button className="block w-64 truncate font-medium underline-offset-2 hover:underline text-left" onClick={() => setEditing(p.id)} title={p.title}>{p.title}</button>
                     <span className="text-xs text-dim mono">#{p.id} · {p.author}</span>
                   </td>
                   <td className="px-3 py-2.5"><span className="flex flex-col items-start gap-1"><Badge status={p.status} /><SeoChip seo={p.seo} /></span></td>
