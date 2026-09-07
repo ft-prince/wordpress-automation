@@ -16,7 +16,9 @@ class SiteSettings(Schema):
 
 
 def _base(request):
-    return f"{request.scheme}://{request.get_host()}"
+    """Must equal the redirect URI registered in Google Cloud, whatever host the browser used."""
+    host = request.get_host().replace("localhost", "127.0.0.1")
+    return f"{request.scheme}://{host}"
 
 
 @router.get("/google/status")
