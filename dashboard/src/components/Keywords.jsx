@@ -9,7 +9,7 @@ const ACTION_TONE = { existing: 'var(--color-ok)', improve: 'var(--color-accent)
 const short = (u) => (u || '').replace(/^https?:\/\/[^/]+/, '') || (u ? '/' : '')
 
 const Tabs = ({ tab, setTab, items }) => (
-  <nav className="mb-5 flex gap-1 border-b border-edge" role="tablist">
+  <nav className="mb-5 flex gap-1 overflow-x-auto whitespace-nowrap border-b border-edge" role="tablist">
     {items.map(([k, label]) => (
       <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
         className={`px-4 py-2 text-sm ${tab === k ? 'border-b-2 border-accent text-ink' : 'text-dim'}`}>{label}</button>
@@ -32,19 +32,19 @@ export default function Keywords({ notify }) {
   const c = data.counts
   return (
     <div>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center">
         <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
           {[['keywords', c.keywords], ['clusters', c.clusters], ['unclustered', c.unclustered], ['unmapped', c.unmapped], ['approved maps', c.approved]].map(([l, v]) => (
             <div key={l} className="rounded-xl border border-edge bg-panel px-4 py-3"><div className="text-2xl font-bold mono">{v}</div><div className="mt-0.5 text-xs uppercase tracking-widest text-dim">{l}</div></div>
           ))}
         </div>
-        <div className="flex flex-col gap-1">
-          {[['research', 'Research from profile'], ['cluster', 'Cluster loose keywords'], ['map', 'Map clusters to URLs']].map(([step, label]) => (
+        <div className="flex flex-col gap-1 md:shrink-0">
+          {[['research', 'Research from profile · ~1 min'], ['cluster', 'Cluster loose keywords · ~1 min'], ['map', 'Map clusters to URLs · ~1 min']].map(([step, label]) => (
             <button key={step} className={btnGhost} disabled={!!busy} onClick={() => run(step, label)}>{busy === step ? 'Working…' : label}</button>
           ))}
           <button className={btnGhost} disabled={!!busy} title="Web-search the top 10 clusters and validate intent against real results"
             onClick={() => { setBusy('serp'); api.serpTop().then((r) => { notify(`SERP analysed ${r.analysed} cluster(s)${r.errors.length ? `, ${r.errors.length} failed` : ''}`); load() }).catch((e) => notify(e.message, true)).finally(() => setBusy('')) }}>
-            {busy === 'serp' ? 'Searching…' : 'Analyse SERPs (top 10)'}</button>
+            {busy === 'serp' ? 'Searching… (about 30s per cluster)' : 'Analyse SERPs (top 10) · ~5 min'}</button>
         </div>
       </div>
       <Tabs tab={tab} setTab={setTab} items={[['clusters', 'Clusters & mapping'], ['loose', `Unclustered (${c.unclustered})`], ['cannibal', 'Cannibalization'], ['gaps', 'Content gaps & pillars'], ['competitors', 'SEO competitors']]} />

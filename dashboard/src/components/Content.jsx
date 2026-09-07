@@ -5,7 +5,7 @@ import { api } from '../api'
 import { btnGhost, btnPrimary, Empty, field, fmtTime, Modal, Spinner } from './bits'
 
 const Tabs = ({ tab, setTab, items }) => (
-  <nav className="mb-5 flex gap-1 border-b border-edge" role="tablist">
+  <nav className="mb-5 flex gap-1 overflow-x-auto whitespace-nowrap border-b border-edge" role="tablist">
     {items.map(([k, label]) => (
       <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
         className={`px-4 py-2 text-sm ${tab === k ? 'border-b-2 border-accent text-ink' : 'text-dim'}`}>{label}</button>

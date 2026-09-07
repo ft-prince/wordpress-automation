@@ -16,6 +16,7 @@ import Keywords from './components/Keywords'
 import Performance from './components/Performance'
 import PageIntro from './components/PageIntro'
 import Guide from './components/Guide'
+import Palette from './components/Palette'
 import { Secrets, Audit, Users } from './components/SecretsAudit'
 
 const NAV = [
@@ -213,6 +214,7 @@ function stateToPath(page, jobId) {
 export default function App() {
   const initial = pathToState()
   const [page, setPage] = useState(initial.page)
+  const [palette, setPalette] = useState(false)
   const [jobId, setJobId] = useState(initial.jobId)
   const [toasts, setToasts] = useState([])
   const [authed, setAuthed] = useState(() => Boolean(auth.token()))
@@ -248,7 +250,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); navigate('posts') }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setPalette((p) => !p) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -262,7 +264,7 @@ export default function App() {
       <aside className="sticky top-0 flex h-screen w-52 shrink-0 flex-col border-r border-edge bg-panel/50 max-md:w-14">
         <div className="px-4 py-5 max-md:px-3">
           <h1 className="text-lg font-bold tracking-tight max-md:hidden">presspilot<span className="text-accent">.</span></h1>
-          <span className="hidden text-lg font-bold max-md:block">a<span className="text-accent">.</span></span>
+          <span className="hidden text-lg font-bold max-md:block">p<span className="text-accent">.</span></span>
         </div>
         <nav className="flex flex-col gap-0.5 px-2" aria-label="Main">
           {NAV.map(([key, label, d]) => (
@@ -281,7 +283,7 @@ export default function App() {
             <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0"><path d="M15 4h5v16h-5M10 17l5-5-5-5M15 12H3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <span className="max-md:hidden">Log out</span>
           </button>
-          <div className="px-3 pt-2 text-xs text-dim mono max-md:hidden">⌘K posts</div>
+          <button className="px-3 pt-2 text-left text-xs text-dim mono hover:text-ink max-md:hidden" onClick={() => setPalette(true)}>⌘K jump / run</button>
         </div>
       </aside>
 
@@ -298,6 +300,7 @@ export default function App() {
         </header>
         <main className="p-6" key={siteVersion}>
           {page !== 'job' && <PageIntro page={page} />}
+          {palette && <Palette nav={NAV} onNavigate={navigate} notify={notify} onClose={() => setPalette(false)} />}
           {page === 'overview' && <Overview onNavigate={navigate} notify={notify} />}
           {page === 'topics' && <Topics notify={notify} />}
           {page === 'posts' && <Posts notify={notify} initialEdit={jobId} />}

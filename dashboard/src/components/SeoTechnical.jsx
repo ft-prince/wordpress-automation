@@ -152,7 +152,7 @@ export default function SeoTechnical({ notify }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center">
         <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
           {[['site score', data.score == null ? '—' : `${data.score}%`, scoreTone(data.score)],
             ['pages crawled', summary?.pages ?? '—'],
