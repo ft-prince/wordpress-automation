@@ -17,6 +17,7 @@ export const INTRO = {
   sites: ['Sites', 'WordPress sites this dashboard manages, plus the Google connection. One Google login covers every site; each site names its own Search Console property and GA4 property id.'],
   health: ['Health', 'Is everything up: WordPress API, scheduler, workers, database, how old each dataset is, and what the AI calls cost.'],
   secrets: ['Secrets & users', 'API keys live in .env and are only ever shown masked. Below: dashboard users and roles - admin (everything), seo (approve, publish, roll back), content (write), viewer (read).'],
+  guide: ['Guide', 'The manual: what every page does, how to use it, what to do next, and how to fix the common problems.'],
   audit: ['Audit', 'Who did what, when, with before/after values. Every automated and manual change lands here.'],
 }
 

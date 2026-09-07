@@ -57,3 +57,7 @@ Optional keys: `BRAVE_KEY` (SERP analysis), `PAGESPEED_KEY` (Core Web Vitals).
 ## Roles
 
 Django groups `admin` / `seo` / `content` / `viewer`. The first account is admin. Approve, publish, rollback need `seo` or `admin`; delete and settings need `admin`. Manage users on the Secrets page.
+
+## Guide
+
+The dashboard has a **Guide** page (last item in the sidebar) that explains every page: what it does, how to use it, what to do next, and the first-hour order that works. Start there.

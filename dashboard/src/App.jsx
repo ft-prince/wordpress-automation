@@ -15,6 +15,7 @@ import Content from './components/Content'
 import Keywords from './components/Keywords'
 import Performance from './components/Performance'
 import PageIntro from './components/PageIntro'
+import Guide from './components/Guide'
 import { Secrets, Audit, Users } from './components/SecretsAudit'
 
 const NAV = [
@@ -33,6 +34,7 @@ const NAV = [
   ['health', 'Health', 'M3 12h4l2-6 4 12 2-6h6'],
   ['secrets', 'Secrets', 'M8 11V7a4 4 0 118 0v4M5 11h14v9H5z'],
   ['audit', 'Audit', 'M9 5h9v14H9zM6 5v14M9 9h9M9 13h9'],
+  ['guide', 'Guide', 'M4 5h7a3 3 0 013 3v12a2 2 0 00-2-2H4zM20 5h-7a3 3 0 00-3 3v12a2 2 0 012-2h8z'],
 ]
 
 function SiteSwitcher({ version, onChange }) {
@@ -152,7 +154,7 @@ function Login({ onDone }) {
   )
 }
 
-const PAGES = ['overview', 'topics', 'posts', 'automations', 'schedule', 'logs', 'performance', 'keywords', 'content', 'seo', 'theme', 'sites', 'health', 'secrets', 'audit']
+const PAGES = ['overview', 'topics', 'posts', 'automations', 'schedule', 'logs', 'performance', 'keywords', 'content', 'seo', 'theme', 'sites', 'health', 'secrets', 'audit', 'guide']
 
 function pathToState() {
   const parts = window.location.pathname.split('/').filter(Boolean)
@@ -272,6 +274,7 @@ export default function App() {
           {page === 'health' && <Health />}
           {page === 'secrets' && <div className="space-y-8"><Secrets notify={notify} /><section><h2 className="mb-3 text-xs uppercase tracking-widest text-dim">Users & roles</h2><Users notify={notify} /></section></div>}
           {page === 'audit' && <Audit />}
+          {page === 'guide' && <Guide />}
         </main>
       </div>
 
