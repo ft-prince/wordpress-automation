@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api, site } from '../api'
 import { Badge, btnGhost, btnPrimary, Empty, Spinner } from './bits'
 import ItemEditor from './ItemEditor'
+import SeoTechnical from './SeoTechnical'
 
 const scoreTone = (s) => (s >= 80 ? 'var(--color-ok)' : s >= 50 ? 'var(--color-accent)' : 'var(--color-bad)')
 
@@ -74,6 +75,20 @@ function Issue({ item, issue, notify, reload, onEdit }) {
 }
 
 export default function Seo({ notify, onNavigate }) {
+  const [tab, setTab] = useState('technical')
+  const tabs = (
+    <nav className="mb-5 flex gap-1 border-b border-edge" role="tablist">
+      {[['technical', 'Technical (crawl)'], ['content', 'Content (WordPress)']].map(([k, label]) => (
+        <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+          className={`px-4 py-2 text-sm ${tab === k ? 'border-b-2 border-accent text-ink' : 'text-dim'}`}>{label}</button>
+      ))}
+    </nav>
+  )
+  if (tab === 'technical') return <div>{tabs}<SeoTechnical notify={notify} /></div>
+  return <div>{tabs}<SeoContent notify={notify} onNavigate={onNavigate} /></div>
+}
+
+function SeoContent({ notify, onNavigate }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 

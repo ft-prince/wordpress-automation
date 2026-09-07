@@ -52,7 +52,7 @@ def execute(job_id, trigger="manual", dry_run=False, extra_args=None):
     try:
         proc = subprocess.Popen(
             cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            text=True, bufsize=1, env={**os.environ, "PYTHONUNBUFFERED": "1", "PRESSPILOT_WORKER": "1"},
         )
     except Exception as exc:
         store.add_log(run_id, f"spawn failed: {exc}", "stderr")
@@ -96,9 +96,13 @@ def execute_async(job_id, trigger="manual", dry_run=False, extra_args=None):
     done = threading.Event()
 
     def target():
-        result = execute(job_id, trigger, dry_run, extra_args)
-        run_id_box["run"] = result
-        done.set()
+        from django.db import close_old_connections
+
+        try:
+            run_id_box["run"] = execute(job_id, trigger, dry_run, extra_args)
+        finally:
+            close_old_connections()
+            done.set()
 
     thread = threading.Thread(target=target, daemon=True)
     thread.start()

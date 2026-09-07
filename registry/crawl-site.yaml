@@ -1,0 +1,18 @@
+id: crawl-site
+name: Crawl site for SEO
+description: Fetches every page (sitemap + internal links), records status codes, titles,
+  meta, headings, links and schema for the technical SEO audit
+runtime: python
+entrypoint: crawl_site.py
+schedule: 0 3 * * 1
+enabled: true
+timeout_seconds: 900
+retries:
+  count: 0
+  backoff_seconds: 60
+args:
+  max-pages: 300
+env: []
+tags:
+- seo
+alert_on_failure: true

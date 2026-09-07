@@ -80,18 +80,30 @@ export const api = {
   bulk: (ids, action, value) => send('/api/wp/posts/bulk' + sq(), 'POST', { ids, action, value }),
   generate: (topic, words = 800) => send('/api/generate', 'POST', { topic, words }),
   sites: () => authedFetch('/api/sites'),
+  // seo
+  technicalSeo: () => authedFetch('/api/seo/technical' + sq()),
+  startCrawl: () => send('/api/seo/crawl' + sq(), 'POST'),
+  seoPage: (id) => authedFetch(`/api/seo/pages/${id}` + sq()),
+  suggestOnpage: (id) => send(`/api/seo/pages/${id}/suggest` + sq(), 'POST'),
+  applyOnpage: (id, field, value) => send(`/api/seo/pages/${id}/apply` + sq(), 'POST', { field, value }),
   addSite: (body) => send('/api/sites', 'POST', body),
   testSite: (body) => send('/api/sites/test', 'POST', body),
   removeSite: (id) => send(`/api/sites/${id}`, 'DELETE'),
 }
 
+// Live tail by polling the log cursor. Same contract as the old WebSocket helper.
 export const liveLog = (runId, onLine, onDone) => {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const ws = new WebSocket(`${proto}://${location.host}/ws/runs/${runId}?token=${encodeURIComponent(auth.token())}`)
-  ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data)
-    if (msg.done) onDone?.(msg.status)
-    else onLine(msg)
-  }
-  return () => ws.close()
+  let cursor = 0
+  let stopped = false
+  const tick = () =>
+    authedFetch(`/api/runs/${runId}/logs?after=${cursor}`)
+      .then((d) => {
+        if (stopped) return
+        d.lines.forEach((l) => { cursor = l.id; onLine(l) })
+        if (d.done) { onDone?.(d.status); stopped = true }
+      })
+      .catch(() => {})
+  tick()
+  const t = setInterval(() => { if (!stopped) tick(); else clearInterval(t) }, 700)
+  return () => { stopped = true; clearInterval(t) }
 }

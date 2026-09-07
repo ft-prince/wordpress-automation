@@ -20,7 +20,7 @@ A self-hosted dashboard that plans, writes, and publishes blog content for one o
 
 ## Setup
 
-1. `python3 -m venv .venv && .venv/bin/pip install fastapi "uvicorn[standard]" pyyaml apscheduler sqlmodel`
+1. `python3 -m venv .venv && .venv/bin/pip install django django-ninja pyyaml apscheduler`
 2. `cd dashboard && npm install && npm run build`
 3. Create `.env` in the repo root:
 
@@ -32,7 +32,7 @@ GROQ_KEY=gsk_...
 PEXELS_KEY=...        # optional, enables stock photos
 ```
 
-4. `nohup .venv/bin/uvicorn core.api:app --host 127.0.0.1 --port 7071 &`
+4. `.venv/bin/python manage.py migrate && .venv/bin/python manage.py runserver 127.0.0.1:7071`
 5. Open http://localhost:7071 and create your login.
 
 Upload `servelens-seo.php` to `wp-content/mu-plugins/` on each WordPress site for the SEO tag output.
