@@ -104,6 +104,17 @@ export const api = {
   mergeCluster: (id, from_id) => send(`/api/clusters/${id}/merge`, 'POST', { from_id }),
   splitCluster: (id, keyword_ids, name) => send(`/api/clusters/${id}/split`, 'POST', { keyword_ids, name }),
   deleteCluster: (id) => send(`/api/clusters/${id}`, 'DELETE'),
+  // users / links / schema
+  me: () => authedFetch('/api/me'),
+  users: () => authedFetch('/api/users'),
+  createUser: (body) => send('/api/users', 'POST', body),
+  patchUser: (id, body) => send(`/api/users/${id}`, 'PATCH', body),
+  deleteUser: (id) => send(`/api/users/${id}`, 'DELETE'),
+  briefLinks: (id) => send(`/api/briefs/${id}/links` + sq(), 'POST'),
+  briefLinksApply: (id) => send(`/api/briefs/${id}/links/apply`, 'POST'),
+  briefSchema: (id) => send(`/api/briefs/${id}/schema` + sq(), 'POST'),
+  proposeInbound: (body) => send('/api/links/propose-inbound' + sq(), 'POST', body),
+  pageLinks: (id) => send(`/api/seo/pages/${id}/links` + sq(), 'POST'),
   // google + insights
   googleStatus: () => authedFetch('/api/google/status' + sq()),
   googleAuthUrl: () => authedFetch('/api/google/auth-url'),

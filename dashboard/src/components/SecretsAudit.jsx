@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { Empty, fmtTime } from './bits'
+import { btnGhost, btnPrimary, Empty, field, fmtTime } from './bits'
 
 export function Secrets({ notify }) {
   const [items, setItems] = useState([])
@@ -45,6 +45,39 @@ export function Secrets({ notify }) {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+export function Users({ notify }) {
+  const [rows, setRows] = useState(null)
+  const [me, setMe] = useState(null)
+  const [form, setForm] = useState({ username: '', password: '', role: 'viewer' })
+  const load = () => api.users().then(setRows).catch((e) => { setRows([]); notify(e.message, true) })
+  useEffect(() => { api.me().then(setMe); load() }, [])
+  if (!rows || !me) return null
+  if (me.role !== 'admin') return <p className="text-xs text-dim">Signed in as <b>{me.username}</b> ({me.role}). Only admins manage users.</p>
+  const create = () => api.createUser(form).then(() => { setForm({ username: '', password: '', role: 'viewer' }); notify('user created'); load() }).catch((e) => notify(e.message, true))
+  return (
+    <div className="max-w-2xl space-y-2">
+      <p className="text-xs text-dim">admin: everything · seo: approve, publish, roll back · content: write briefs and drafts · viewer: read only</p>
+      {rows.map((u) => (
+        <div key={u.id} className="flex items-center gap-3 rounded-lg border border-edge bg-panel px-4 py-2 text-sm">
+          <span className="mono font-medium">{u.username}</span>
+          <select className="rounded border border-edge bg-base px-2 py-1 text-xs" value={u.role} disabled={u.username === me.username}
+            onChange={(e) => api.patchUser(u.id, { role: e.target.value }).then(() => { notify('role updated'); load() }).catch((err) => notify(err.message, true))}>
+            {['admin', 'seo', 'content', 'viewer'].map((r) => <option key={r}>{r}</option>)}
+          </select>
+          <span className="text-xs text-dim">{u.last_login ? `last login ${fmtTime(u.last_login)}` : 'never logged in'}</span>
+          {u.username !== me.username && <button className={`${btnGhost} ml-auto`} style={{ color: 'var(--color-bad)' }} onClick={() => confirm(`Remove ${u.username}?`) && api.deleteUser(u.id).then(load)}>Remove</button>}
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <input className={field} placeholder="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+        <input className={field} type="password" placeholder="password (8+)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <select className={`${field} w-32`} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{['admin', 'seo', 'content', 'viewer'].map((r) => <option key={r}>{r}</option>)}</select>
+        <button className={btnPrimary} disabled={!form.username || form.password.length < 8} onClick={create}>Add</button>
+      </div>
     </div>
   )
 }

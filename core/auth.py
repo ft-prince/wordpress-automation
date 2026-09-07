@@ -12,7 +12,7 @@ from django.utils import timezone
 from ninja.security import APIKeyHeader
 
 from core.models import ApiToken
-from core.secrets import _parse
+from core.secrets import _parse, remove
 
 SESSION_DAYS = 7
 
@@ -52,7 +52,10 @@ def verify(username, password):
     if user:
         return user
     if _legacy_ok(username, password) and not User.objects.filter(username=username.strip()).exists():
-        return User.objects.create_superuser(username.strip(), password=password)
+        user = User.objects.create_superuser(username.strip(), password=password)
+        for key in ("DASH_USER", "DASH_SALT", "DASH_PASS_HASH"):
+            remove(key)  # the hash has done its job; Django owns the password now
+        return user
     return None
 
 

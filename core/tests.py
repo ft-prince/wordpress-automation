@@ -310,3 +310,68 @@ class InsightsTest(TestCase):
         self.assertEqual(r["organic"]["now"]["sessions"], 40)
         self.assertEqual(r["organic"]["before"]["sessions"], 100)
         self.assertEqual(r["search"]["now"]["clicks"], 13)
+
+
+class RolesSchemaLinksCostsTest(TestCase):
+    def test_roles_and_gate(self):
+        from django.contrib.auth.models import User
+        from ninja.errors import HttpError
+
+        from core import roles
+
+        viewer = User.objects.create_user("v", password="password123")
+        seo = roles.create("s", "password123", "seo")
+        self.assertEqual(roles.role_of(viewer), "viewer")
+        self.assertEqual(roles.role_of(User.objects.get(pk=seo["id"])), "seo")
+
+        class R:  # minimal request stand-in
+            def __init__(self, u):
+                self.auth = u
+        with self.assertRaises(HttpError):
+            roles.require(R(viewer), "approve")
+        self.assertEqual(roles.require(R(User.objects.get(pk=seo["id"])), "approve"), "seo")
+        with self.assertRaises(HttpError):
+            roles.require(R(User.objects.get(pk=seo["id"])), "delete")
+        with self.assertRaises(ValueError):
+            roles.create("x", "short", "seo")
+
+    def test_schema_from_draft(self):
+        from unittest import mock
+
+        from core import schema, sites
+        from core.models import Brief
+
+        html = "<h2>Intro</h2><p>x</p><h2>FAQ</h2><h3>Is it free?</h3><p>Yes, <b>always</b>.</p><h3>Why?</h3><p>Because.</p>"
+        b = Brief.objects.create(site="t", title="T", draft_title="Headline here", draft_meta="desc", draft_html=html, primary_keyword="k")
+        with mock.patch.object(sites, "env_for", lambda site=None: {"_site_id": "t", "WEBSITE_LINK": "https://t.example", "language": "en"}):
+            out = schema.for_brief(b.pk)
+        self.assertEqual(out["types"], ["Article", "FAQPage"])
+        self.assertEqual(out["errors"], [])
+        faq = out["jsonld"]["@graph"][1]["mainEntity"]
+        self.assertEqual(faq[0]["acceptedAnswer"]["text"], "Yes, always.")
+        injected = schema.inject(html, out["jsonld"])
+        self.assertEqual(injected.count("application/ld+json"), 1)
+        self.assertEqual(schema.inject(injected, out["jsonld"]).count("application/ld+json"), 1)  # idempotent
+
+    def test_apply_outbound_links(self):
+        from core import linking
+        from core.models import Brief
+
+        b = Brief.objects.create(site="t", title="T", draft_html="<p>Our crowd analytics tool counts people.</p><p>More.</p>",
+                                 link_plan={"outbound": [{"url": "https://t/crowd/", "anchor": "crowd analytics"},
+                                                         {"url": "https://t/other/", "anchor": "not in text"}]})
+        out = linking.apply_outbound(b.pk)
+        b.refresh_from_db()
+        self.assertEqual(out["linked"], ["https://t/crowd/", "https://t/other/"])
+        self.assertIn('<a href="https://t/crowd/">crowd analytics</a>', b.draft_html)
+        self.assertIn('<a href="https://t/other/">not in text</a>', b.draft_html)
+        self.assertEqual(b.draft_html.count("https://t/crowd/"), 1)
+
+    def test_cost_ledger(self):
+        from core import costs
+        from core.models import LlmCall
+
+        costs.record({"model": "openai/gpt-oss-120b", "usage": {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000}}, "test")
+        costs.record({"bogus": True})  # must not raise
+        self.assertEqual(LlmCall.objects.count(), 1)
+        self.assertAlmostEqual(costs.summary()["today"]["usd"], 0.75)

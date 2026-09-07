@@ -185,10 +185,31 @@ def refresh_plan(site=None, limit=50):
         for r in _agg(site_id, cur, "page"):
             if r["page"] in dead and r["clicks"] > 0:
                 reasons[r["page"]].append(("Redirect", f"returns {next(p.status_code for p in crawl.pages.all() if p.url == r['page'])} but still gets {r['clicks']} clicks"))
+    for r in outdated_content(site):
+        reasons[r["page"]].append(("Refresh", f"not updated since {r['modified'][:10]}"))
     order = ["Redirect", "Merge", "Refresh", "Expand", "Re-optimize"]
     plan = [{"page": page, "action": sorted({a for a, _ in rs}, key=order.index)[0], "reasons": [f"{a}: {why}" for a, why in rs]}
             for page, rs in reasons.items()]
     return sorted(plan, key=lambda p: (order.index(p["action"]), -len(p["reasons"])))[:limit]
+
+
+OUTDATED_DAYS = 365
+
+
+def outdated_content(site=None, limit=50):
+    """Published posts untouched for a year. Freshness is a ranking signal on its own."""
+    from datetime import datetime
+
+    from core import wp_api
+
+    try:
+        posts = wp_api.posts("publish", 50, site=site)
+    except (RuntimeError, ValueError, SystemExit):  # no WP creds in tests / unreachable site
+        return []
+    cutoff = (date.today() - timedelta(days=OUTDATED_DAYS)).isoformat()
+    out = [{"page": p["link"], "title": p["title"], "modified": p["modified_gmt"], "wp_id": p["id"]}
+           for p in posts if (p.get("modified_gmt") or "")[:10] and p["modified_gmt"][:10] < cutoff]
+    return sorted(out, key=lambda r: r["modified"])[:limit]
 
 
 def summary(site=None):

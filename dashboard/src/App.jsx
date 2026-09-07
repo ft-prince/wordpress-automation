@@ -14,7 +14,7 @@ import Topics from './components/Topics'
 import Content from './components/Content'
 import Keywords from './components/Keywords'
 import Performance from './components/Performance'
-import { Secrets, Audit } from './components/SecretsAudit'
+import { Secrets, Audit, Users } from './components/SecretsAudit'
 
 const NAV = [
   ['overview', 'Overview', 'M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10'],
@@ -268,7 +268,7 @@ export default function App() {
           {page === 'theme' && <ThemeFiles notify={notify} />}
           {page === 'sites' && <Sites notify={notify} onSiteChange={onSiteChange} />}
           {page === 'health' && <Health />}
-          {page === 'secrets' && <Secrets notify={notify} />}
+          {page === 'secrets' && <div className="space-y-8"><Secrets notify={notify} /><section><h2 className="mb-3 text-xs uppercase tracking-widest text-dim">Users & roles</h2><Users notify={notify} /></section></div>}
           {page === 'audit' && <Audit />}
         </main>
       </div>

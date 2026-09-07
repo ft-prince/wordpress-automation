@@ -48,6 +48,20 @@ def used_by(key):
     return [j["id"] for j in registry.all_jobs() if key in (j.get("env") or [])]
 
 
+def remove(key):
+    """Drop a key from .env entirely (used once the legacy dashboard login is upgraded)."""
+    if not os.path.exists(ENV_PATH):
+        return False
+    with open(ENV_PATH) as fh:
+        lines = fh.read().splitlines()
+    kept = [l for l in lines if not l.strip().startswith(f"{key}=")]
+    if len(kept) == len(lines):
+        return False
+    with open(ENV_PATH, "w") as fh:
+        fh.write("\n".join(kept).rstrip("\n") + "\n")
+    return True
+
+
 def set_value(key, value):
     """Rewrite .env in place, preserving comments and order. Never echoes the value back."""
     if not SAFE_KEY.match(key or ""):

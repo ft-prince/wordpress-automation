@@ -42,3 +42,18 @@ Upload `servelens-seo.php` to `wp-content/mu-plugins/` on each WordPress site fo
 - Credentials never reach the browser; the sites file and .env stay out of git.
 - Each connected site gets its own posts, SEO audit, pipeline and health view.
 - The default publish policy is draft, so nothing goes live without a human click.
+
+## Google Search Console + GA4
+
+1. Google Cloud → new project → enable **Search Console API**, **Analytics Data API** (and optionally **Analytics Admin API**).
+2. Google Auth Platform → Audience → add yourself as a test user.
+3. Clients → create **Web application** client with redirect URI `http://127.0.0.1:7071/api/google/callback`.
+4. Dashboard → Secrets → `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+5. Dashboard → Sites → **Connect Google** → sign in → **List my properties** → fill GSC property (`sc-domain:example.com`) and GA4 numeric property id per site → Save.
+6. Performance → **Sync now** (the `sync-google` automation also runs nightly).
+
+Optional keys: `BRAVE_KEY` (SERP analysis), `PAGESPEED_KEY` (Core Web Vitals).
+
+## Roles
+
+Django groups `admin` / `seo` / `content` / `viewer`. The first account is admin. Approve, publish, rollback need `seo` or `admin`; delete and settings need `admin`. Manage users on the Secrets page.

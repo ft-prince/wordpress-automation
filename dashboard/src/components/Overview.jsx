@@ -108,6 +108,10 @@ export default function Overview({ onNavigate, notify }) {
         <Stat label="approvals" value={stats.pending_approval} tone={stats.pending_approval ? 'var(--color-accent)' : undefined} onClick={() => onNavigate('posts')} />
         <Stat label="running" value={stats.running_now} tone="var(--color-run)" onClick={() => onNavigate('logs')} />
         <Stat label="failed 24h" value={stats.failed_24h} tone={stats.failed_24h ? 'var(--color-bad)' : undefined} onClick={() => onNavigate('logs')} />
+        <Stat label="technical score" value={stats.seo?.technical_score != null ? `${stats.seo.technical_score}%` : null} tone={stats.seo?.technical_score >= 80 ? 'var(--color-ok)' : stats.seo?.technical_score != null ? 'var(--color-accent)' : undefined} onClick={() => onNavigate('seo')} />
+        <Stat label="QA pass rate" value={stats.seo?.qa_pass_rate != null ? `${stats.seo.qa_pass_rate}%` : null} onClick={() => onNavigate('content')} />
+        <Stat label="pending changes" value={stats.seo?.pending_changes} tone={stats.seo?.pending_changes ? 'var(--color-accent)' : undefined} onClick={() => onNavigate('content')} />
+        <Stat label="clicks 28d" value={stats.seo?.gsc_clicks_28d} tone="var(--color-run)" onClick={() => onNavigate('performance')} />
       </div>
 
       <RunningNow jobs={jobs} />

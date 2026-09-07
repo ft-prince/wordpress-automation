@@ -4,7 +4,12 @@ from datetime import datetime, timedelta, timezone
 
 from ninja import Router, Schema
 
-from core import registry, scheduler, secrets, sites, store, topics, wp_api
+from datetime import date, timedelta
+
+from django.db.models import Sum
+
+from core import costs, registry, roles, scheduler, secrets, sites, store, topics, wp_api
+from core.models import Brief, Change, Crawl, GscRow, Sync
 from core.api.jobs import job_site
 
 router = Router()
@@ -35,6 +40,7 @@ def list_sites(request):
 
 @router.post("/sites")
 def add_site(request, body: SiteCreate):
+    roles.require(request, "settings")
     result = sites.add(body.id, body.name, body.url, body.user, body.password)
     store.add_audit("dashboard", "site-added", body.id, None, {"url": body.url})
     return result
@@ -47,6 +53,7 @@ def test_site(request, body: SiteTest):
 
 @router.delete("/sites/{site_id}")
 def remove_site(request, site_id: str):
+    roles.require(request, "settings")
     sites.remove(site_id)
     wp_api.invalidate()
     store.add_audit("dashboard", "site-removed", site_id)
@@ -60,6 +67,7 @@ def list_secrets(request):
 
 @router.put("/secrets/{key}")
 def set_secret(request, key: str, payload: SecretValue):
+    roles.require(request, "settings")
     secrets.set_value(key, payload.value)
     store.add_audit("dashboard", "set-secret", key, None, {"value": "***"})
     return {"saved": True}
@@ -92,6 +100,7 @@ def overview_stats(request, site: str | None = None):
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()[:10]
     published = lists["publish"] or []
     return {
+        "seo": seo_tiles(site),
         **store.metrics(site=site or sites.default_id()),
         "posts_total": None if all(v is None for v in counts.values())
         else sum(v or 0 for v in counts.values()),
@@ -120,9 +129,53 @@ def pipeline(request, site: str | None = None):
     }
 
 
+CRAWL_STALE_DAYS = 14
+GSC_STALE_DAYS = 4
+
+
+def freshness(site):
+    """Age of every dataset, so stale numbers never pass as current."""
+    site_id = site or sites.default_id()
+    crawl = Crawl.objects.filter(site=site_id, status="done").order_by("-id").first()
+    out = {"crawl_days": (date.today() - crawl.finished_at.date()).days if crawl and crawl.finished_at else None}
+    for src in ("gsc", "ga4"):
+        last = Sync.objects.filter(site=site_id, source=src, error="").order_by("-id").first()
+        out[f"{src}_days"] = (date.today() - last.finished_at.date()).days if last and last.finished_at else None
+    return out
+
+
+def seo_tiles(site):
+    """Overview numbers that come from the SEO side of the house."""
+    from core import seo, technical
+
+    site_id = site or sites.default_id()
+    score = None
+    crawl = Crawl.objects.filter(site=site_id, status="done").order_by("-id").first()
+    if crawl:
+        score = technical.analyze(crawl, list(crawl.pages.all()))["score"]
+    qa_done = Brief.objects.filter(site=site_id).exclude(qa={})
+    passed = sum(1 for b in qa_done if (b.qa or {}).get("verdict") == "pass")
+    since = date.today() - timedelta(days=31)
+    clicks = GscRow.objects.filter(site=site_id, date__gte=since).aggregate(c=Sum("clicks"))["c"]
+    return {"technical_score": score, "qa_pass_rate": round(passed / qa_done.count() * 100) if qa_done.count() else None,
+            "pending_changes": Change.objects.filter(site=site_id, status="proposed").count(),
+            "briefs_in_review": Brief.objects.filter(site=site_id, status="qa").count(),
+            "gsc_clicks_28d": clicks}
+
+
 def alerts_for(site):
     """Everything that needs the user's attention, one list."""
     items = []
+    fresh = freshness(site)
+    if fresh["crawl_days"] is None:
+        items.append({"level": "warn", "text": "No crawl yet - open SEO and crawl the site so the technical audit has data"})
+    elif fresh["crawl_days"] > CRAWL_STALE_DAYS:
+        items.append({"level": "warn", "text": f"Crawl is {fresh['crawl_days']} days old - re-crawl for a current technical audit"})
+    if fresh["gsc_days"] is not None and fresh["gsc_days"] > GSC_STALE_DAYS:
+        items.append({"level": "warn", "text": f"Search Console data is {fresh['gsc_days']} days old - run sync-google"})
+    pending = Change.objects.filter(site=site or sites.default_id(), status="proposed").count()
+    if pending:
+        items.append({"level": "approval", "text": f"{pending} proposed change(s) waiting for approval on the Content page"})
     health = wp_api.health(site)
     if not health["connected"]:
         items.append({"level": "critical", "text": f"WordPress connection lost: {health['error']}"})
@@ -197,4 +250,6 @@ def system_health(request, site: str | None = None):
         "db_ok": db_ok,
         "workers_active": running_now,
         "last_successful_run": last_success[0]["ended_at"] if last_success else None,
+        "freshness": freshness(site),
+        "llm": costs.summary(),
     }

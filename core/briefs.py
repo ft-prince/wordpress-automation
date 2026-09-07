@@ -267,7 +267,12 @@ def approve(brief_id, site=None, actor="dashboard", status="draft"):
         raise KeyError(brief_id)
     if not brief.draft_html:
         raise ValueError("nothing to approve - write a draft first")
-    post = wp_api.create_post({"title": brief.draft_title or brief.title, "content": brief.draft_html,
+    from core import schema as schema_mod
+
+    content = brief.draft_html
+    if brief.schema_jsonld:
+        content = schema_mod.inject(content, brief.schema_jsonld)
+    post = wp_api.create_post({"title": brief.draft_title or brief.title, "content": content,
                                "excerpt": brief.draft_meta, "status": status}, site=site)
     brief.status, brief.post_id = "approved", post["id"]
     brief.save()

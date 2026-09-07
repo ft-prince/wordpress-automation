@@ -91,7 +91,7 @@ Ground the post in these researched facts (weave them in naturally, keep the yea
 """
 
 
-def _post(path, payload, key, _retried=False):
+def _post(path, payload, key, _retried=False, purpose="gen"):
     request = urllib.request.Request(
         f"{GROQ_URL}{path}",
         data=json.dumps(payload).encode(),
@@ -104,7 +104,14 @@ def _post(path, payload, key, _retried=False):
     )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS * 4) as response:
-            return json.loads(response.read())
+            data = json.loads(response.read())
+            try:
+                from core import costs
+
+                costs.record(data, purpose)
+            except Exception:
+                pass  # ledger is best-effort; the writer must never fail on accounting
+            return data
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf8", "replace")[:400]
         # Free tier is 8k tokens/min — wait out a 429 once instead of failing the run.
@@ -112,7 +119,7 @@ def _post(path, payload, key, _retried=False):
             wait_match = re.search(r"try again in ([\d.]+)s", detail)
             delay = min(float(wait_match.group(1)) + 1 if wait_match else 30, 90)
             time.sleep(delay)
-            return _post(path, payload, key, _retried=True)
+            return _post(path, payload, key, _retried=True, purpose=purpose)
         raise RuntimeError(f"Groq {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"cannot reach Groq: {exc.reason}") from exc

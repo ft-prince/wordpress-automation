@@ -49,6 +49,10 @@ export default function Health() {
           detail={`${h.workers_active ?? 0} run(s) executing now`}
           sub={`last successful run: ${h.last_successful_run ? fmtTime(h.last_successful_run) : 'never'}`} />
         <HealthCard title="Database" ok={h.db_ok} detail={h.db_ok ? 'SQLite · WAL mode' : 'database query failed'} />
+        <HealthCard title="Data freshness" ok={(h.freshness?.crawl_days ?? 99) <= 14 && (h.freshness?.gsc_days ?? 0) <= 4}
+          detail={`crawl ${h.freshness?.crawl_days ?? '—'}d · Search Console ${h.freshness?.gsc_days ?? '—'}d · GA4 ${h.freshness?.ga4_days ?? '—'}d old`} />
+        <HealthCard title="AI spend" ok={true}
+          detail={`today $${h.llm?.today?.usd ?? 0} (${h.llm?.today?.calls ?? 0} calls) · 7d $${h.llm?.week?.usd ?? 0} · 30d $${h.llm?.month?.usd ?? 0} / ${((h.llm?.month?.tokens ?? 0) / 1000).toFixed(0)}k tokens`} />
         <HealthCard title="Last failed request" ok={wp.last_fail?.at ? false : true}
           detail={wp.last_fail?.at ? `${fmtTime(wp.last_fail.at)} — ${wp.last_fail.error}` : 'no failures recorded this session'} />
       </div>

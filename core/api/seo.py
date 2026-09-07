@@ -2,7 +2,7 @@
 from ninja import Router, Schema
 from ninja.errors import HttpError
 
-from core import runner, seo, store
+from core import linking, roles, runner, seo, store
 
 router = Router()
 CRAWL_JOB = "crawl-site"
@@ -38,6 +38,7 @@ def seo_suggest(request, item_id: int, body: SeoSuggest, site: str | None = None
 
 @router.post("/seo/items/{item_id}/apply")
 def seo_apply(request, item_id: int, body: SeoFix, site: str | None = None):
+    roles.require(request, "approve")
     return seo.apply_fix(body.base, item_id, body.field, body.value, site=site, actor=request.auth.username)
 
 
@@ -62,6 +63,11 @@ def page_detail(request, page_id: int, site: str | None = None):
     return seo.page_detail(page_id, site=site)
 
 
+@router.post("/seo/pages/{page_id}/links")
+def page_links(request, page_id: int, site: str | None = None):
+    return linking.plan_for_page(page_id, site=site)
+
+
 @router.post("/seo/pages/{page_id}/suggest")
 def onpage_suggest(request, page_id: int, site: str | None = None):
     return seo.suggest_onpage(page_id, site=site)
@@ -69,4 +75,5 @@ def onpage_suggest(request, page_id: int, site: str | None = None):
 
 @router.post("/seo/pages/{page_id}/apply")
 def onpage_apply(request, page_id: int, body: OnpageApply, site: str | None = None):
+    roles.require(request, "approve")
     return seo.apply_onpage(page_id, body.field, body.value, site=site, actor=request.auth.username)

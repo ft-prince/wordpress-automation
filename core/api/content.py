@@ -1,7 +1,7 @@
 """Business profile, change approvals, and the brief -> draft -> QA -> approve chain."""
 from ninja import Router, Schema
 
-from core import briefs, changes, profile
+from core import briefs, changes, linking, profile, roles, schema
 
 router = Router()
 
@@ -88,16 +88,19 @@ def propose_change(request, body: ChangePropose, site: str | None = None):
 
 @router.post("/changes/{change_id}/apply")
 def apply_change(request, change_id: int):
+    roles.require(request, "approve")
     return changes.apply(change_id, actor=request.auth.username)
 
 
 @router.post("/changes/{change_id}/reject")
 def reject_change(request, change_id: int):
+    roles.require(request, "approve")
     return changes.reject(change_id, actor=request.auth.username)
 
 
 @router.post("/changes/{change_id}/rollback")
 def rollback_change(request, change_id: int):
+    roles.require(request, "rollback")
     return changes.rollback(change_id, actor=request.auth.username)
 
 
@@ -135,8 +138,35 @@ def qa_brief(request, brief_id: int, site: str | None = None):
 
 @router.post("/briefs/{brief_id}/approve")
 def approve_brief(request, brief_id: int, body: Approve = None, site: str | None = None):
+    roles.require(request, "approve")
     return briefs.approve(brief_id, site=site, actor=request.auth.username,
                           status=body.status if body else "draft")
+
+
+class InboundPropose(Schema):
+    wp_base: str
+    wp_id: int
+    sentence: str
+
+
+@router.post("/briefs/{brief_id}/links")
+def brief_links(request, brief_id: int, site: str | None = None):
+    return linking.plan_for_brief(brief_id, site=site)
+
+
+@router.post("/briefs/{brief_id}/links/apply")
+def brief_links_apply(request, brief_id: int):
+    return linking.apply_outbound(brief_id)
+
+
+@router.post("/briefs/{brief_id}/schema")
+def brief_schema(request, brief_id: int, site: str | None = None):
+    return schema.for_brief(brief_id, site=site)
+
+
+@router.post("/links/propose-inbound")
+def propose_inbound(request, body: InboundPropose, site: str | None = None):
+    return linking.propose_inbound(body.wp_base, body.wp_id, body.sentence, site=site)
 
 
 @router.post("/briefs/{brief_id}/reject")

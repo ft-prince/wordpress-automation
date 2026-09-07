@@ -35,7 +35,7 @@ def _invalid(request, exc):
     return _reply(request, 422, f"{where}: {first.get('msg', 'invalid input')}")
 
 
-from core.api import auth, content, google, jobs, keywords, seo, system, topics, wp  # noqa: E402
+from core.api import auth, content, google, jobs, keywords, seo, system, topics, users, wp  # noqa: E402
 
-for module in (auth, jobs, wp, seo, content, keywords, google, topics, system):
+for module in (auth, users, jobs, wp, seo, content, keywords, google, topics, system):
     api.add_router("", module.router)

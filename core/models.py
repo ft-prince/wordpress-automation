@@ -206,6 +206,8 @@ class Brief(models.Model):
     draft_meta = models.CharField(max_length=300, default="", blank=True)
     draft_html = models.TextField(default="", blank=True)
     qa = models.JSONField(default=dict)
+    link_plan = models.JSONField(default=dict)     # {"outbound": [...], "inbound": [...]}
+    schema_jsonld = models.JSONField(default=dict)
     status = models.CharField(max_length=12, default="brief", db_index=True)
     post_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -291,3 +293,13 @@ class Sync(models.Model):
     date_from = models.DateField(null=True, blank=True)
     date_to = models.DateField(null=True, blank=True)
     error = models.TextField(default="", blank=True)
+
+
+class LlmCall(models.Model):
+    """Every model call: tokens and estimated cost, so the Health page can show spend."""
+    ts = models.DateTimeField(default=timezone.now, db_index=True)
+    model = models.CharField(max_length=64)
+    purpose = models.CharField(max_length=32, default="", blank=True)
+    prompt_tokens = models.IntegerField(default=0)
+    completion_tokens = models.IntegerField(default=0)
+    cost_usd = models.FloatField(default=0)

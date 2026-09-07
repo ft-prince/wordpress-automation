@@ -4,7 +4,7 @@ import urllib.parse
 from ninja import Router, Schema
 from ninja.errors import HttpError
 
-from core import sites, store, wp_api
+from core import roles, sites, store, wp_api
 
 router = Router()
 
@@ -90,6 +90,8 @@ def wp_create_post(request, body: PostFields, site: str | None = None):
 def wp_bulk(request, body: BulkRequest, site: str | None = None):
     if not body.ids:
         raise HttpError(400, "no posts selected")
+    if body.action in ("publish", "trash", "delete", "reschedule"):
+        roles.require(request, "delete" if body.action == "delete" else "publish")
     results = wp_api.bulk(body.ids, body.action, body.value, site=site)
     ok = sum(1 for r in results if r["ok"])
     store.add_audit("dashboard", f"bulk-{body.action}", f"{ok}/{len(results)} posts")
@@ -113,6 +115,7 @@ def wp_update_post(request, post_id: int, body: PostFields, site: str | None = N
 
 @router.delete("/wp/posts/{post_id}")
 def wp_delete_post(request, post_id: int, force: bool = False, site: str | None = None):
+    roles.require(request, "delete" if force else "publish")
     result = wp_api.delete_post(post_id, force, site=site)
     store.add_audit("dashboard", "post-delete" + ("-forever" if force else ""), f"wp:{post_id}")
     return result
@@ -152,6 +155,8 @@ def generate_featured(request, post_id: int, body: ImageGen = None, site: str | 
 
 @router.post("/wp/posts/{post_id}/status")
 def wp_set_status(request, post_id: int, body: StatusChange, site: str | None = None):
+    if body.status == "publish":
+        roles.require(request, "publish")
     result = wp_api.set_status(post_id, body.status, site=site)
     store.add_audit("dashboard", f"post-{body.status}", f"wp:{post_id}")
     return result

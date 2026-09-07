@@ -156,8 +156,11 @@ function BriefDrawer({ id, notify, onClose }) {
       custom_instructions: form.custom_instructions, outline: form.outline.split('\n').filter(Boolean).map((h2) => ({ h2, h3: [], notes: '' })), faqs: form.faqs.split('\n').filter(Boolean) })
       .then(() => { setEdit(false); load(); notify('brief updated') }).catch((e) => notify(e.message, true)).finally(() => setBusy(''))
   }
+  const run = (name, fn) => { setBusy(name); fn().then(() => { notify(`${name} done`); load() }).catch((e) => notify(e.message, true)).finally(() => setBusy('')) }
   const next = NEXT[b.status]
   const qa = b.qa || {}
+  const plan = b.link_plan || {}
+  const inboundToPage = (url) => null
   return (
     <Modal title={b.draft_title || b.title} onClose={onClose} wide>
       <div className="space-y-4 text-sm">
@@ -168,6 +171,8 @@ function BriefDrawer({ id, notify, onClose }) {
           <span className="ml-auto flex gap-2">
             {b.status !== 'approved' && b.status !== 'rejected' && <button className={btnGhost} onClick={() => setEdit(!edit)}>{edit ? 'Cancel edit' : 'Edit brief'}</button>}
             {b.status === 'qa' && <button className={btnGhost} disabled={!!busy} onClick={() => act('draft')}>Re-draft</button>}
+            {b.draft_html && b.status !== 'approved' && <button className={btnGhost} disabled={!!busy} onClick={() => run('links', () => api.briefLinks(id))}>{busy === 'links' ? 'Linking…' : 'Suggest links'}</button>}
+            {b.draft_html && b.status !== 'approved' && <button className={btnGhost} disabled={!!busy} onClick={() => run('schema', () => api.briefSchema(id))}>{busy === 'schema' ? 'Building…' : b.schema_jsonld?.['@graph'] ? 'Rebuild schema' : 'Generate schema'}</button>}
             {next && <button className={btnPrimary} disabled={!!busy} onClick={() => act(next[0])}>{busy === next[0] ? 'Working…' : next[1]}</button>}
             {b.status !== 'rejected' && b.status !== 'approved' && <button className={btnGhost} disabled={!!busy} onClick={() => act('reject')}>Reject</button>}
           </span>
@@ -204,6 +209,28 @@ function BriefDrawer({ id, notify, onClose }) {
           </Box>
         )}
 
+        {(plan.outbound?.length > 0 || plan.inbound?.length > 0) && (
+          <Box label="Internal links">
+            {plan.outbound?.length > 0 && (
+              <div className="text-xs">
+                <div className="mb-1 flex items-center gap-2 text-dim">This article should link to
+                  {b.status !== 'approved' && <button className={btnGhost} onClick={() => run('apply links', () => api.briefLinksApply(id))}>Insert into draft</button>}</div>
+                <ul className="list-disc pl-4">{plan.outbound.map((l, i) => <li key={i}><span className="mono">{l.anchor}</span> → {l.url.replace(/^https?:\/\/[^/]+/, '')} <span className="text-dim">({l.section}) {l.reason}</span></li>)}</ul>
+              </div>
+            )}
+            {plan.inbound?.length > 0 && (
+              <div className="mt-2 text-xs">
+                <div className="mb-1 text-dim">Existing pages that should link here (after publishing, replace the anchor with the live URL)</div>
+                <ul className="list-disc pl-4">{plan.inbound.map((l, i) => <li key={i}>{l.url.replace(/^https?:\/\/[^/]+/, '')}: “{l.sentence}” <span className="text-dim">{l.reason}</span></li>)}</ul>
+              </div>
+            )}
+          </Box>
+        )}
+        {b.schema_jsonld?.['@graph'] && (
+          <Box label={`Structured data · ${b.schema_jsonld['@graph'].map((g) => g['@type']).join(' + ')} (injected on approve)`}>
+            <pre className="max-h-40 overflow-auto text-[10px] text-dim">{JSON.stringify(b.schema_jsonld, null, 1)}</pre>
+          </Box>
+        )}
         {qa.score != null && (
           <Box label={`QA · ${qa.score}/100 · ${qa.verdict}`}>
             <ul className="grid gap-x-4 md:grid-cols-2">
