@@ -49,6 +49,9 @@ class BriefPatch(Schema):
     cta: str | None = None
     word_target: int | None = None
     custom_instructions: str | None = None
+    draft_title: str | None = None
+    draft_meta: str | None = None
+    draft_html: str | None = None
 
 
 class Approve(Schema):

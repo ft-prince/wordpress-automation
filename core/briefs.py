@@ -140,12 +140,18 @@ def update(brief_id, **fields):
     if not brief:
         raise KeyError(brief_id)
     allowed = {"title", "primary_keyword", "secondary_keywords", "intent", "content_type", "audience",
-               "outline", "entities", "faqs", "internal_links", "cta", "word_target", "custom_instructions"}
+               "outline", "entities", "faqs", "internal_links", "cta", "word_target", "custom_instructions",
+               "draft_title", "draft_meta", "draft_html"}
+    draft_edited = False
     for key, value in fields.items():
         if key not in allowed:
             raise ValueError(f"not editable: {key}")
         if value is not None:
+            if key.startswith("draft_") and getattr(brief, key) != value:
+                draft_edited = True
             setattr(brief, key, value)
+    if draft_edited and brief.status in ("qa", "drafted"):
+        brief.status, brief.qa = "drafted", {}   # a hand-edited draft must pass QA again
     brief.save()
     return _row(brief)
 

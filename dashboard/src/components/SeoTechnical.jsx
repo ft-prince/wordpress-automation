@@ -132,6 +132,8 @@ export default function SeoTechnical({ notify }) {
   const [error, setError] = useState(null)
   const [openPage, setOpenPage] = useState(null)
   const [filter, setFilter] = useState('')
+  const [issueQ, setIssueQ] = useState('')
+  const [sev, setSev] = useState('')
 
   const load = () => api.technicalSeo().then((d) => { setData(d); setError(null) }).catch((e) => setError(e.message))
   useEffect(() => { load() }, [])
@@ -187,8 +189,13 @@ export default function SeoTechnical({ notify }) {
 
       {issues?.length > 0 && (
         <section className="space-y-2">
-          <h3 className="text-xs uppercase tracking-widest text-dim">Issues by rule ({summary.issues} across {summary.affected_pages} pages)</h3>
-          {issues.map((g) => <IssueGroup key={g.code} group={g} onPage={(url) => { const p = byUrl(url); if (p) setOpenPage(p.id) }} />)}
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-xs uppercase tracking-widest text-dim">Issues by rule ({summary.issues} across {summary.affected_pages} pages)</h3>
+            <span className="ml-auto flex gap-1">{['', 'high', 'medium', 'low'].map((s) => <button key={s} onClick={() => setSev(s)} className={`rounded-full border px-2 py-0.5 text-[10px] uppercase mono ${sev === s ? 'border-accent text-ink' : 'border-edge text-dim'}`}>{s || 'all'}</button>)}</span>
+            <input className="w-56 rounded-lg border border-edge bg-base px-3 py-1.5 text-xs outline-none focus:border-accent" placeholder="filter by rule or URL" value={issueQ} onChange={(e) => setIssueQ(e.target.value)} />
+          </div>
+          {issues.filter((g) => (!sev || g.severity === sev) && (!issueQ || g.label.toLowerCase().includes(issueQ.toLowerCase()) || g.code.includes(issueQ.toLowerCase()) || g.pages.some((p) => p.url.includes(issueQ))))
+            .map((g) => <IssueGroup key={g.code} group={issueQ && !g.label.toLowerCase().includes(issueQ.toLowerCase()) && !g.code.includes(issueQ.toLowerCase()) ? { ...g, pages: g.pages.filter((p) => p.url.includes(issueQ)) } : g} onPage={(url) => { const p = byUrl(url); if (p) setOpenPage(p.id) }} />)}
         </section>
       )}
       {crawl?.status === 'done' && issues?.length === 0 && <Empty quip="Clean crawl. Nothing to fix." />}

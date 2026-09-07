@@ -1,0 +1,21 @@
+id: keyword-pipeline
+name: Keyword pipeline
+description: Research keywords from the business profile, cluster them, map clusters to
+  URLs and analyse the top SERPs. Started from the Keywords page with a single step,
+  or run everything monthly on schedule.
+runtime: python
+entrypoint: keywords_site.py
+schedule: 0 6 1 * *
+enabled: true
+timeout_seconds: 1800
+retries:
+  count: 0
+  backoff_seconds: 60
+args:
+  step: all
+env:
+- GROQ_KEY
+tags:
+- seo
+- keywords
+alert_on_failure: true

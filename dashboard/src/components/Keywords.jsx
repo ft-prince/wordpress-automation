@@ -21,11 +21,22 @@ export default function Keywords({ notify }) {
   const [tab, setTab] = useState('clusters')
   const [data, setData] = useState(null)
   const [busy, setBusy] = useState('')
+  const [job, setJob] = useState(null)   // {run, last_line} of the keyword-pipeline job
   const load = () => api.keywords().then(setData).catch((e) => notify(e.message, true))
-  useEffect(() => { load() }, [])
+  const poll = () => api.keywordPipeline().then(setJob).catch(() => {})
+  useEffect(() => { load(); poll() }, [])
+  const running = job?.run?.status === 'running'
+  useEffect(() => {
+    if (!running) return
+    const t = setInterval(() => api.keywordPipeline().then((j) => {
+      setJob(j)
+      if (j.run?.status !== 'running') { notify(j.run?.status === 'success' ? 'keyword pipeline finished' : `keyword pipeline ${j.run?.status}: ${j.run?.error || 'see Logs'}`, j.run?.status !== 'success'); load() }
+    }).catch(() => {}), 3000)
+    return () => clearInterval(t)
+  }, [running])
   const run = (step, label) => {
     setBusy(step)
-    api.keywordRun(step).then((r) => { notify(`${label}: ${Object.entries(r).map(([k, v]) => `${k} ${v}`).join(', ')}`); load() })
+    api.keywordRun(step).then(() => { notify(`${label} started - progress below`); poll() })
       .catch((e) => notify(e.message, true)).finally(() => setBusy(''))
   }
   if (!data) return <Spinner />
@@ -39,14 +50,19 @@ export default function Keywords({ notify }) {
           ))}
         </div>
         <div className="flex flex-col gap-1 md:shrink-0">
-          {[['research', 'Research from profile · ~1 min'], ['cluster', 'Cluster loose keywords · ~1 min'], ['map', 'Map clusters to URLs · ~1 min']].map(([step, label]) => (
-            <button key={step} className={btnGhost} disabled={!!busy} onClick={() => run(step, label)}>{busy === step ? 'Working…' : label}</button>
+          {[['research', 'Research from profile'], ['cluster', 'Cluster loose keywords'], ['map', 'Map clusters to URLs'], ['serp', 'Analyse SERPs (top 10)']].map(([step, label]) => (
+            <button key={step} className={btnGhost} disabled={!!busy || running} onClick={() => run(step, label)}>{label}</button>
           ))}
-          <button className={btnGhost} disabled={!!busy} title="Web-search the top 10 clusters and validate intent against real results"
-            onClick={() => { setBusy('serp'); api.serpTop().then((r) => { notify(`SERP analysed ${r.analysed} cluster(s)${r.errors.length ? `, ${r.errors.length} failed` : ''}`); load() }).catch((e) => notify(e.message, true)).finally(() => setBusy('')) }}>
-            {busy === 'serp' ? 'Searching… (about 30s per cluster)' : 'Analyse SERPs (top 10) · ~5 min'}</button>
         </div>
       </div>
+      {job?.run && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: running ? 'var(--color-run)' : 'var(--color-edge)' }}>
+          <span className={`inline-block h-2 w-2 rounded-full ${running ? 'dot-running' : ''}`} style={{ background: running ? 'var(--color-run)' : job.run.status === 'success' ? 'var(--color-ok)' : 'var(--color-bad)' }} />
+          <span className="font-medium">Keyword pipeline {running ? 'running' : job.run.status}</span>
+          <span className="mono text-dim truncate">{job.last_line}</span>
+          {running && <button className="ml-auto text-dim hover:text-ink" onClick={() => api.stop(job.run.id).then(poll)}>stop</button>}
+        </div>
+      )}
       <Tabs tab={tab} setTab={setTab} items={[['clusters', 'Clusters & mapping'], ['loose', `Unclustered (${c.unclustered})`], ['cannibal', 'Cannibalization'], ['gaps', 'Content gaps & pillars'], ['competitors', 'SEO competitors']]} />
       {tab === 'clusters' && <Clusters data={data} reload={load} notify={notify} />}
       {tab === 'loose' && <Loose data={data} reload={load} notify={notify} />}

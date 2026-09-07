@@ -28,23 +28,31 @@ function Sparkline({ daily }) {
   return <svg viewBox="0 0 300 42" className="h-10 w-full" aria-label="clicks per day"><polyline points={pts} fill="none" stroke="var(--color-run)" strokeWidth="1.5" /></svg>
 }
 
-const Section = ({ title, hint, rows, quip, cols, render, action }) => (
-  <section>
-    <div className="mb-2 flex items-center gap-3">
-      <h3 className="text-xs uppercase tracking-widest text-dim">{title} ({rows.length})</h3>
-      <span className="text-xs text-dim">{hint}</span>
-      {action}
-    </div>
-    {rows.length === 0 ? <p className="text-xs text-dim">{quip}</p> : (
-      <div className="overflow-hidden rounded-xl border border-edge">
-        <table className="w-full text-xs">
-          <thead className="bg-panel text-left uppercase tracking-widest text-dim"><tr>{cols.map((c) => <th key={c} className="px-3 py-1.5">{c}</th>)}</tr></thead>
-          <tbody>{rows.slice(0, 25).map((r, i) => <tr key={i} className="border-t border-edge">{render(r).map((cell, j) => <td key={j} className="px-3 py-1.5 mono">{cell}</td>)}</tr>)}</tbody>
-        </table>
+function Section({ title, hint, rows, quip, cols, render, action }) {
+  const [q, setQ] = useState('')
+  const [all, setAll] = useState(false)
+  const hits = q ? rows.filter((r) => JSON.stringify(r).toLowerCase().includes(q.toLowerCase())) : rows
+  const shown = all ? hits : hits.slice(0, 25)
+  return (
+    <section>
+      <div className="mb-2 flex flex-wrap items-center gap-3">
+        <h3 className="text-xs uppercase tracking-widest text-dim">{title} ({rows.length})</h3>
+        <span className="text-xs text-dim">{hint}</span>
+        {action}
+        {rows.length > 5 && <input className="ml-auto w-48 rounded-lg border border-edge bg-base px-3 py-1 text-xs outline-none focus:border-accent" placeholder="search" value={q} onChange={(e) => setQ(e.target.value)} />}
       </div>
-    )}
-  </section>
-)
+      {rows.length === 0 ? <p className="text-xs text-dim">{quip}</p> : (
+        <div className="overflow-hidden rounded-xl border border-edge">
+          <table className="w-full text-xs">
+            <thead className="bg-panel text-left uppercase tracking-widest text-dim"><tr>{cols.map((c) => <th key={c} className="px-3 py-1.5">{c}</th>)}</tr></thead>
+            <tbody>{shown.map((r, i) => <tr key={i} className="border-t border-edge">{render(r).map((cell, j) => <td key={j} className="px-3 py-1.5 mono">{cell}</td>)}</tr>)}</tbody>
+          </table>
+          {hits.length > 25 && <button className="w-full border-t border-edge py-1.5 text-xs text-dim hover:text-ink" onClick={() => setAll(!all)}>{all ? 'show first 25' : `show all ${hits.length}`}</button>}
+        </div>
+      )}
+    </section>
+  )
+}
 
 export default function Performance({ notify, onNavigate }) {
   const [st, setSt] = useState(null)

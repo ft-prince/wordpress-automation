@@ -142,7 +142,7 @@ def analyze_cluster(cluster_id, site=None):
     return cluster.serp
 
 
-def analyze_top(site=None, limit=10):
+def analyze_top(site=None, limit=10, log=lambda *_: None):
     """Analyse the highest-priority clusters that have no fresh SERP data."""
     site_id = sites.env_for(site)["_site_id"]
     cutoff = (timezone.now() - timedelta(days=CACHE_DAYS)).isoformat()
@@ -153,10 +153,13 @@ def analyze_top(site=None, limit=10):
         if (c.serp or {}).get("fetched_at", "") > cutoff:
             continue
         try:
-            analyze_cluster(c.pk, site)
+            result = analyze_cluster(c.pk, site)
             done += 1
+            log(f"   {c.name}: intent {result['intent']} ({'matches' if result['intent_matches'] else 'differs'}), "
+                f"format {result['content_type']}, own rank {result['own_rank'] or 'not in top 10'}")
         except Exception as exc:
             errors.append(f"{c.name}: {str(exc)[:120]}")
+            log(f"   {c.name}: failed - {str(exc)[:120]}")
     return {"analysed": done, "errors": errors}
 
 

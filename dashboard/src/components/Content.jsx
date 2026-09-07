@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { btnGhost, btnPrimary, Empty, field, fmtTime, Modal, Spinner } from './bits'
+import RichEditor from './RichEditor'
 
 const Tabs = ({ tab, setTab, items }) => (
   <nav className="mb-5 flex gap-1 overflow-x-auto whitespace-nowrap border-b border-edge" role="tablist">
@@ -141,6 +142,8 @@ function BriefDrawer({ id, notify, onClose }) {
   const [b, setB] = useState(null)
   const [busy, setBusy] = useState('')
   const [edit, setEdit] = useState(false)
+  const [editDraft, setEditDraft] = useState(false)
+  const [draft, setDraft] = useState({})
   const [form, setForm] = useState({})
   const load = () => api.brief(id).then((x) => { setB(x); setForm({ primary_keyword: x.primary_keyword, intent: x.intent, audience: x.audience, cta: x.cta, word_target: x.word_target, custom_instructions: x.custom_instructions, outline: x.outline.map((o) => o.h2).join('\n'), faqs: x.faqs.join('\n') }) }).catch((e) => { notify(e.message, true); onClose() })
   useEffect(() => { load() }, [id])
@@ -155,6 +158,12 @@ function BriefDrawer({ id, notify, onClose }) {
     api.patchBrief(id, { primary_keyword: form.primary_keyword, intent: form.intent, audience: form.audience, cta: form.cta, word_target: +form.word_target,
       custom_instructions: form.custom_instructions, outline: form.outline.split('\n').filter(Boolean).map((h2) => ({ h2, h3: [], notes: '' })), faqs: form.faqs.split('\n').filter(Boolean) })
       .then(() => { setEdit(false); load(); notify('brief updated') }).catch((e) => notify(e.message, true)).finally(() => setBusy(''))
+  }
+  const saveDraft = () => {
+    setBusy('save-draft')
+    api.patchBrief(id, { draft_title: draft.title, draft_meta: draft.meta, draft_html: draft.html })
+      .then(() => { setEditDraft(false); load(); notify('draft saved - run QA again before approving') })
+      .catch((e) => notify(e.message, true)).finally(() => setBusy(''))
   }
   const run = (name, fn) => { setBusy(name); fn().then(() => { notify(`${name} done`); load() }).catch((e) => notify(e.message, true)).finally(() => setBusy('')) }
   const next = NEXT[b.status]
@@ -171,6 +180,7 @@ function BriefDrawer({ id, notify, onClose }) {
           <span className="ml-auto flex gap-2">
             {b.status !== 'approved' && b.status !== 'rejected' && <button className={btnGhost} onClick={() => setEdit(!edit)}>{edit ? 'Cancel edit' : 'Edit brief'}</button>}
             {b.status === 'qa' && <button className={btnGhost} disabled={!!busy} onClick={() => act('draft')}>Re-draft</button>}
+            {b.draft_html && b.status !== 'approved' && <button className={btnGhost} onClick={() => { setDraft({ title: b.draft_title, meta: b.draft_meta, html: b.draft_html }); setEditDraft(!editDraft) }}>{editDraft ? 'Cancel edit' : 'Edit draft'}</button>}
             {b.draft_html && b.status !== 'approved' && <button className={btnGhost} disabled={!!busy} onClick={() => run('links', () => api.briefLinks(id))}>{busy === 'links' ? 'Linking…' : 'Suggest links'}</button>}
             {b.draft_html && b.status !== 'approved' && <button className={btnGhost} disabled={!!busy} onClick={() => run('schema', () => api.briefSchema(id))}>{busy === 'schema' ? 'Building…' : b.schema_jsonld?.['@graph'] ? 'Rebuild schema' : 'Generate schema'}</button>}
             {next && <button className={btnPrimary} disabled={!!busy} onClick={() => act(next[0])}>{busy === next[0] ? 'Working…' : next[1]}</button>}
@@ -202,7 +212,18 @@ function BriefDrawer({ id, notify, onClose }) {
           </div>
         )}
 
-        {b.draft_html && (
+        {editDraft && (
+          <Box label="Edit draft">
+            <div className="space-y-2">
+              <label className="block text-xs uppercase tracking-widest text-dim">Title<input className={`${field} mt-1`} value={draft.title || ''} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /><span className="mono text-[10px] text-dim">{(draft.title || '').length} chars (30-60)</span></label>
+              <label className="block text-xs uppercase tracking-widest text-dim">Meta description<textarea className={`${field} mt-1 min-h-14`} value={draft.meta || ''} onChange={(e) => setDraft({ ...draft, meta: e.target.value })} /><span className="mono text-[10px] text-dim">{(draft.meta || '').length} chars (120-160)</span></label>
+              <div className="text-xs uppercase tracking-widest text-dim">Body</div>
+              <RichEditor value={draft.html} onChange={(html) => setDraft({ ...draft, html })} />
+              <div className="flex gap-2"><button className={btnPrimary} disabled={busy === 'save-draft'} onClick={saveDraft}>{busy === 'save-draft' ? 'Saving…' : 'Save draft'}</button><span className="self-center text-xs text-dim">Saving resets QA - run it again before approving.</span></div>
+            </div>
+          </Box>
+        )}
+        {b.draft_html && !editDraft && (
           <Box label={`Draft · ${b.draft_title}`}>
             <p className="mb-2 mono text-xs text-dim">meta: {b.draft_meta} ({b.draft_meta.length})</p>
             <div className="prose-sm max-h-80 overflow-y-auto rounded border border-edge bg-base p-3 text-xs leading-relaxed [&_h2]:mt-3 [&_h2]:font-bold [&_h3]:mt-2 [&_h3]:font-semibold [&_a]:underline [&_ul]:list-disc [&_ul]:pl-4" dangerouslySetInnerHTML={{ __html: b.draft_html }} />

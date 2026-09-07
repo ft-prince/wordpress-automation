@@ -95,6 +95,7 @@ export const api = {
   keywords: () => authedFetch('/api/keywords' + sq()),
   addKeyword: (text) => send('/api/keywords' + sq(), 'POST', { text }),
   keywordRun: (step) => send(`/api/keywords/${step}` + sq(), 'POST'),
+  keywordPipeline: () => authedFetch('/api/keywords/pipeline' + sq()),
   keywordMove: (id, cluster_id) => send(`/api/keywords/${id}/move`, 'POST', { cluster_id }),
   keywordPrimary: (id) => send(`/api/keywords/${id}/primary`, 'POST'),
   deleteKeyword: (id) => send(`/api/keywords/${id}`, 'DELETE'),

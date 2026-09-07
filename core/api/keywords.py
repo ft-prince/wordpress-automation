@@ -1,7 +1,23 @@
 """Keyword research, clusters, URL mapping, cannibalization, content gaps."""
 from ninja import Router, Schema
 
-from core import keywords, serp
+from ninja.errors import HttpError
+
+from core import keywords, runner, serp, sites, store
+
+PIPELINE_JOB = "keyword-pipeline"
+
+
+def _start(step, site, limit=None):
+    site_id = sites.env_for(site)["_site_id"]
+    last = store.runs(job_id=PIPELINE_JOB, limit=1, site=site_id)
+    if last and last[0]["status"] == "running":
+        raise HttpError(409, "the keyword pipeline is already running for this site - see Logs")
+    extra = {"step": step, "site": site_id}
+    if limit:
+        extra["limit"] = limit
+    runner.execute_async(PIPELINE_JOB, trigger="manual", extra_args=extra)
+    return {"started": True, "job_id": PIPELINE_JOB, "step": step}
 
 router = Router()
 
@@ -47,6 +63,12 @@ def add_keyword(request, body: KeywordAdd, site: str | None = None):
 
 @router.post("/keywords/research")
 def research(request, site: str | None = None):
+    """Starts the keyword-pipeline job (research step). Logs stream on the Logs page."""
+    return _start("research", site)
+
+
+@router.post("/keywords/research/sync")
+def research_sync(request, site: str | None = None):
     return keywords.research(site)
 
 
@@ -57,11 +79,21 @@ def harvest(request, site: str | None = None):
 
 @router.post("/keywords/cluster")
 def cluster(request, site: str | None = None):
+    return _start("cluster", site)
+
+
+@router.post("/keywords/cluster/sync")
+def cluster_sync(request, site: str | None = None):
     return keywords.cluster(site)
 
 
 @router.post("/keywords/map")
-def map_urls(request, site: str | None = None, all: bool = False):
+def map_urls(request, site: str | None = None):
+    return _start("map", site)
+
+
+@router.post("/keywords/map/sync")
+def map_urls_sync(request, site: str | None = None, all: bool = False):
     return keywords.map_urls(site, only_unmapped=not all)
 
 
@@ -124,7 +156,22 @@ def cluster_serp(request, cluster_id: int, site: str | None = None):
 
 @router.post("/keywords/serp")
 def serp_top(request, site: str | None = None, limit: int = 10):
+    return _start("serp", site, limit)
+
+
+@router.post("/keywords/serp/sync")
+def serp_top_sync(request, site: str | None = None, limit: int = 10):
     return serp.analyze_top(site, limit)
+
+
+@router.get("/keywords/pipeline")
+def pipeline_status(request, site: str | None = None):
+    rows = store.runs(job_id=PIPELINE_JOB, limit=1, site=sites.env_for(site)["_site_id"])
+    if not rows:
+        return {"run": None}
+    run = rows[0]
+    lines = store.logs(run["id"])
+    return {"run": run, "last_line": lines[-1]["line"] if lines else ""}
 
 
 @router.get("/keywords/competitors")
