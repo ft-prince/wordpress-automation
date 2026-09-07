@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, auth, authStatus, login, logoutServer, setupAccount, site } from './api'
 import Overview from './components/Overview'
 import Posts from './components/Posts'
@@ -54,39 +54,79 @@ function SiteSwitcher({ version, onChange }) {
   )
 }
 
+// Alert centre. Badge = urgent items you have not seen yet; opening the panel marks the
+// current items seen; each item can be dismissed or clicked to jump to the right page.
+const SEEN_KEY = 'bell_seen'
+const noteKey = (n) => `${n.level}|${n.text}`
+const readSeen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]') } catch { return [] } }
+const targetFor = (n) => {
+  const t = n.text.toLowerCase()
+  if (t.includes('proposed change')) return 'content'
+  if (t.includes('search console') || t.includes('google')) return 'performance'
+  if (t.includes('topic queue')) return 'topics'
+  if (t.includes('seo issue') || t.includes('crawl')) return 'seo'
+  if (t.includes('wordpress connection')) return 'health'
+  if (n.level === 'approval' || t.startsWith('published') || t.includes('scheduled post')) return 'posts'
+  if (n.level === 'error' || t.includes('run #') || t.includes('failed') || t.includes('timed out')) return 'logs'
+  if (t.includes('disabled')) return 'automations'
+  return 'overview'
+}
+
 function Bell({ onNavigate, version }) {
   const [items, setItems] = useState([])
   const [open, setOpen] = useState(false)
+  const [seen, setSeen] = useState(readSeen)
+  const ref = useRef(null)
   useEffect(() => {
     const load = () => api.notifications().then(setItems).catch(() => {})
     load()
     const t = setInterval(load, 10000)
     return () => clearInterval(t)
   }, [version])
-  const urgent = items.filter((i) => ['critical', 'error', 'warn', 'approval'].includes(i.level)).length
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
+  const remember = (keys) => { const next = [...new Set([...seen, ...keys])].slice(-300); localStorage.setItem(SEEN_KEY, JSON.stringify(next)); setSeen(next) }
+  const visible = items.filter((n) => !seen.includes(`x|${noteKey(n)}`))
+  const isUrgent = (n) => ['critical', 'error', 'warn', 'approval'].includes(n.level)
+  const unseen = visible.filter((n) => isUrgent(n) && !seen.includes(noteKey(n))).length
+  const toggle = () => { if (!open) remember(visible.map(noteKey)); setOpen(!open) }
+  const dismiss = (n) => remember([`x|${noteKey(n)}`])
+  const go = (n) => { setOpen(false); onNavigate(targetFor(n)) }
   const tone = { critical: 'var(--color-bad)', error: 'var(--color-bad)', warn: 'var(--color-accent)', approval: 'var(--color-accent)', success: 'var(--color-ok)' }
   return (
-    <div className="relative">
-      <button onClick={() => setOpen(!open)} aria-label={`Notifications (${urgent} need attention)`} className="relative rounded-lg border border-edge p-2 hover:border-accent">
+    <div className="relative" ref={ref}>
+      <button onClick={toggle} aria-label={`Notifications (${unseen} new)`} aria-expanded={open} className="relative rounded-lg border border-edge p-2 hover:border-accent">
         <svg viewBox="0 0 24 24" className="h-4 w-4"><path d="M6 9a6 6 0 1112 0c0 5 2 6 2 6H4s2-1 2-6zM10 19a2 2 0 004 0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
-        {urgent > 0 && (
+        {unseen > 0 && (
           <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-black" style={{ background: 'var(--color-accent)' }}>
-            {urgent}
+            {unseen}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-96 rounded-xl border border-edge bg-panel p-2 shadow-2xl">
-          <h3 className="px-2 py-1.5 text-xs uppercase tracking-widest text-dim">Notifications</h3>
-          {items.length === 0 ? (
+        <div className="absolute right-0 top-11 z-50 w-96 rounded-xl border border-edge bg-panel p-2 shadow-2xl" role="dialog" aria-label="Notifications">
+          <div className="flex items-center px-2 py-1.5">
+            <h3 className="text-xs uppercase tracking-widest text-dim">Notifications</h3>
+            {visible.length > 0 && <button className="ml-auto text-xs text-dim hover:text-ink" onClick={() => remember(visible.map((n) => `x|${noteKey(n)}`))}>Clear all</button>}
+          </div>
+          {visible.length === 0 ? (
             <p className="px-2 py-4 text-sm text-dim">You're all caught up.</p>
           ) : (
             <ul className="max-h-96 overflow-y-auto">
-              {items.map((n, i) => (
-                <li key={i} className="rounded-lg px-2 py-2 text-sm hover:bg-edge/30">
-                  <span className="mr-2 text-[10px] uppercase mono" style={{ color: tone[n.level] || 'var(--color-dim)' }}>{n.level}</span>
-                  {n.text}
-                  {n.ts && <div className="mt-0.5 text-xs text-dim mono">{new Date(/Z|[+-]\d\d:\d\d$/.test(n.ts) ? n.ts : n.ts + 'Z').toLocaleString()}</div>}
+              {visible.map((n, i) => (
+                <li key={i} className="group flex items-start gap-2 rounded-lg px-2 py-2 text-sm hover:bg-edge/30">
+                  <button className="min-w-0 flex-1 text-left" onClick={() => go(n)} title={`Open ${targetFor(n)}`}>
+                    <span className="mr-2 text-[10px] uppercase mono" style={{ color: tone[n.level] || 'var(--color-dim)' }}>{n.level}</span>
+                    {n.text}
+                    {n.ts && <div className="mt-0.5 text-xs text-dim mono">{new Date(/Z|[+-]\d\d:\d\d$/.test(n.ts) ? n.ts : n.ts + 'Z').toLocaleString()}</div>}
+                  </button>
+                  <button className="shrink-0 rounded px-1 text-dim opacity-0 hover:text-ink group-hover:opacity-100" aria-label="Dismiss" onClick={() => dismiss(n)}>✕</button>
                 </li>
               ))}
             </ul>

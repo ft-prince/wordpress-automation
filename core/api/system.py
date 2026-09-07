@@ -235,8 +235,18 @@ def notifications(request, site: str | None = None):
                               "text": f"Published: {p['title']}"})
     except RuntimeError:
         pass
-    items.sort(key=lambda i: i["ts"] or "￿", reverse=True)  # newest first, ts-less alerts on top
-    return items[:30]
+    import re
+
+    seen, unique = set(), []
+    for item in items:  # the alert strip and run history both report failed runs; keep one
+        match = re.search(r"#(\d+)", item["text"])
+        key = f"run:{match.group(1)}" if match else item["text"]
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    unique.sort(key=lambda i: i["ts"] or "￿", reverse=True)  # newest first, ts-less alerts on top
+    return unique[:30]
 
 
 @router.get("/health")
