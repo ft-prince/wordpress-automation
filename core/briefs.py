@@ -90,6 +90,7 @@ INTENT_HINT = {"informational": "learn or understand something", "commercial": "
 def _row(b):
     data = store._row(b)
     data["topic"] = b.topic_id
+    data["updated_at"] = b.updated_at.isoformat(timespec="seconds")  # auto_now fields skip model_to_dict
     return data
 
 

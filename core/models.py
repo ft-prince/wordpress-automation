@@ -210,3 +210,42 @@ class Brief(models.Model):
     post_id = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class Cluster(models.Model):
+    """A topic: keywords that one page should answer. Maps to an existing URL, a page to
+    improve, or a page that does not exist yet (content gap)."""
+    ACTIONS = ("existing", "improve", "new", "ignore")
+    ROLES = ("pillar", "cluster", "supporting")
+
+    site = models.CharField(max_length=48, db_index=True)
+    name = models.CharField(max_length=160)
+    parent_topic = models.CharField(max_length=160, default="", blank=True)
+    intent = models.CharField(max_length=24, default="informational")
+    role = models.CharField(max_length=12, default="cluster")
+    action = models.CharField(max_length=12, default="")
+    target_url = models.CharField(max_length=1000, default="", blank=True)
+    target_wp_base = models.CharField(max_length=32, default="", blank=True)
+    target_wp_id = models.IntegerField(null=True, blank=True)
+    reason = models.TextField(default="", blank=True)
+    priority = models.IntegerField(default=50)      # business priority x opportunity, 0-100
+    approved = models.BooleanField(default=False)   # SEO user signed off on the mapping
+    created_at = models.DateTimeField(default=timezone.now)
+
+
+class Keyword(models.Model):
+    SOURCES = ("seed", "longtail", "question", "crawl", "topic", "brief", "manual")
+
+    site = models.CharField(max_length=48, db_index=True)
+    text = models.CharField(max_length=160)
+    source = models.CharField(max_length=12, default="manual")
+    intent = models.CharField(max_length=24, default="", blank=True)
+    relevance = models.IntegerField(default=50)     # business relevance 0-100
+    commercial = models.IntegerField(default=0)     # commercial value 0-100
+    cluster = models.ForeignKey(Cluster, null=True, blank=True, on_delete=models.SET_NULL, related_name="keywords")
+    is_primary = models.BooleanField(default=False)
+    found_on = models.JSONField(default=list)       # crawled URLs whose title/h1 already carry it
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = [("site", "text")]

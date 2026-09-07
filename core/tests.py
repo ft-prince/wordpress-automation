@@ -183,3 +183,64 @@ class ProfileTest(TestCase):
             saved = profile.save({"name": "Acme", "products": ["Widget"], "facts": ["Founded 2020"]})
             self.assertFalse(saved["is_empty"])
             self.assertIn("Founded 2020", profile.context())
+
+
+class KeywordOpsTest(TestCase):
+    """Manual controls + cannibalization + gaps need no model."""
+
+    def setUp(self):
+        from unittest import mock
+
+        from core import sites
+
+        p = mock.patch.object(sites, "env_for", lambda site=None: {"_site_id": "t", "WEBSITE_LINK": "https://t"})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_merge_split_primary(self):
+        from core import keywords
+        from core.models import Cluster, Keyword
+
+        a = Cluster.objects.create(site="t", name="A", intent="commercial")
+        b = Cluster.objects.create(site="t", name="B", intent="commercial")
+        k1 = Keyword.objects.create(site="t", text="cctv analytics", cluster=a, is_primary=True, relevance=90)
+        k2 = Keyword.objects.create(site="t", text="cctv ai software", cluster=a, relevance=70)
+        k3 = Keyword.objects.create(site="t", text="camera ai", cluster=b, is_primary=True, relevance=60)
+        merged = keywords.merge(a.pk, b.pk)
+        self.assertEqual(len(merged["keywords"]), 3)
+        self.assertFalse(Cluster.objects.filter(pk=b.pk).exists())
+        self.assertEqual(sum(1 for k in merged["keywords"] if k["is_primary"]), 1)
+        new = keywords.split(a.pk, [k2.pk, k3.pk], "Camera software")
+        self.assertEqual(len(new["keywords"]), 2)
+        self.assertTrue(any(k["is_primary"] for k in new["keywords"]))
+        self.assertEqual(Keyword.objects.get(pk=k1.pk).cluster_id, a.pk)
+        keywords.set_primary(k3.pk)
+        self.assertFalse(Keyword.objects.get(pk=k2.pk).is_primary)
+
+    def test_cannibalization_and_gaps(self):
+        from core import keywords
+        from core.models import Cluster, Keyword
+
+        c1 = Cluster.objects.create(site="t", name="buy", intent="commercial", action="existing", target_url="https://t/p/", priority=80)
+        c2 = Cluster.objects.create(site="t", name="learn", intent="informational", action="existing", target_url="https://t/p/", priority=40)
+        c3 = Cluster.objects.create(site="t", name="pricing", intent="transactional", action="new", priority=90)
+        c4 = Cluster.objects.create(site="t", name="how to", intent="informational", action="new", parent_topic="learn", priority=30)
+        Keyword.objects.create(site="t", text="cctv analytics", cluster=c1, is_primary=True, found_on=["https://t/a/", "https://t/b/"])
+        Keyword.objects.create(site="t", text="cctv guide", cluster=c2, found_on=["https://t/q/"])
+        issues = {i["type"] for i in keywords.cannibalization()}
+        self.assertEqual(issues, {"mixed-intent-target", "shared-primary-keyword", "wrong-page-targeting"})
+        g = keywords.gaps()
+        self.assertEqual([c["name"] for c in g["missing_commercial_pages"]], ["pricing"])
+        self.assertEqual([c["name"] for c in g["supporting_content"]], ["how to"])
+        self.assertEqual(g["unmapped"], 0)
+
+    def test_harvest_reads_crawl_titles(self):
+        from core import keywords
+        from core.models import Crawl, Keyword, Page
+
+        c = Crawl.objects.create(site="t", status="done")
+        Page.objects.create(crawl=c, url="https://t/x/", final_url="https://t/x/", status_code=200, content_type="text/html",
+                            word_count=300, title="Crowd People Analytics - Brand", h1=["Crowd People Analytics"])
+        self.assertEqual(keywords.harvest(), 1)
+        kw = Keyword.objects.get(site="t", text="crowd people analytics")
+        self.assertEqual(kw.found_on, ["https://t/x/"])

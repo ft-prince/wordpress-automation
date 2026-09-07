@@ -3,18 +3,25 @@ import json
 import re
 
 
+MAX_TOKENS = 12000
+REASONING = "low"  # gpt-oss otherwise spends the whole budget thinking and returns nothing
+
+
 def ask(prompt, temperature=0.4, model=None):
     import gen
 
     env = gen.load_env()
-    data = gen._post(
-        "/chat/completions",
-        {"model": model or env.get("GROQ_MODEL", gen.DEFAULT_MODEL),
-         "messages": [{"role": "user", "content": prompt}],
-         "temperature": temperature},
-        gen.api_key(env),
-    )
-    return data["choices"][0]["message"]["content"].strip()
+    payload = {"model": model or env.get("GROQ_MODEL", gen.DEFAULT_MODEL),
+               "messages": [{"role": "user", "content": prompt}],
+               "temperature": temperature, "max_completion_tokens": MAX_TOKENS}
+    if "gpt-oss" in payload["model"]:
+        payload["reasoning_effort"] = REASONING
+    data = gen._post("/chat/completions", payload, gen.api_key(env))
+    choice = data["choices"][0]
+    content = (choice["message"].get("content") or "").strip()
+    if not content:
+        raise RuntimeError(f"model returned no content (finish_reason={choice.get('finish_reason')})")
+    return content
 
 
 def ask_json(prompt, temperature=0.3, model=None):
