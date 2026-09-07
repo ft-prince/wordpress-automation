@@ -11,7 +11,7 @@ from django.utils import timezone
 
 import wp
 from core import crawl as crawler
-from core import sites, store, technical, wp_api
+from core import changes, sites, store, technical, wp_api
 from core.models import Page, SeoAudit
 
 _lock = threading.Lock()
@@ -224,22 +224,16 @@ def suggest_meta(base, item_id, site=None):
     return {"value": value}
 
 
-def apply_fix(base, item_id, field, value, site=None):
-    """User approved a fix - write it, log before/after for rollback."""
-    if field not in ("excerpt", "title", "slug", "meta_desc"):
+def apply_fix(base, item_id, field, value, site=None, actor="dashboard"):
+    """User approved a content-audit fix -> change gate -> WordPress."""
+    kind = {"excerpt": "excerpt", "title": "title", "slug": "slug", "meta_desc": "meta"}.get(field)
+    if not kind:
         raise ValueError(f"cannot auto-fix field: {field}")
-    if not re.match(r"^[a-z0-9-]+$", base):
+    if not re.match(r"^[a-z0-9-]+$", base) or base not in wp_api.SAFE_BASE:
         raise ValueError(f"bad rest base: {base}")
     env = sites.env_for(site)
-    before = wp.call(f"/{base}/{int(item_id)}?context=edit&_fields=title,excerpt,slug,meta", env=env)
-    old = {"title": (before.get("title") or {}).get("raw"), "excerpt": (before.get("excerpt") or {}).get("raw"),
-           "slug": before.get("slug"), "meta_desc": (before.get("meta") or {}).get("servelens_seo_desc")}.get(field)
-    payload = {"meta": {"servelens_seo_desc": value}} if field == "meta_desc" else {field: value}
-    result = wp.call(f"/{base}/{int(item_id)}?context=edit", payload, method="POST", env=env)
-    if field == "meta_desc" and (result.get("meta") or {}).get("servelens_seo_desc", "") != value:
-        raise RuntimeError("WordPress ignored this field. Upload servelens-seo.php v1.1 to mu-plugins first")
-    wp_api.invalidate()
-    store.add_audit("dashboard", f"seo-fix-{field}", f"{base}:{item_id}", {field: old}, {field: value})
+    change = changes.propose_and_apply(kind, base, int(item_id), value, reason="content audit fix",
+                                       source="ai", site=site, actor=actor)
 
     def drop(data):
         for r in data["results"]:
@@ -248,7 +242,7 @@ def apply_fix(base, item_id, field, value, site=None):
                 total = 7 if r["type"] == "post" else 4
                 r["score"] = round(max(total - len(r["issues"]), 0) / total * 100)
     _edit_saved(env["_site_id"], drop)
-    return {"id": result["id"], "applied": field}
+    return {"id": int(item_id), "applied": field, "change": change["id"]}
 
 
 # ── technical audit (crawl) ────────────────────────────────────────────────
@@ -328,9 +322,9 @@ def suggest_onpage(page_id, site=None):
     return out
 
 
-def apply_onpage(page_id, field, value, site=None):
-    """Approved suggestion -> WordPress. title/meta go through the item API; H1 on
-    posts IS the title (theme renders it), on template pages it is suggest-only."""
+def apply_onpage(page_id, field, value, site=None, actor="dashboard"):
+    """Approved suggestion -> WordPress through the change gate (logged, rollback-able).
+    H1 on posts IS the title (theme renders it); on template pages it is suggest-only."""
     page = Page.objects.filter(pk=page_id).first()
     if not page:
         raise KeyError(page_id)
@@ -340,21 +334,17 @@ def apply_onpage(page_id, field, value, site=None):
         raise ValueError(f"cannot apply field: {field}")
     if field == "h1" and page.wp_base != "posts":
         raise ValueError("H1 on this page comes from the template - suggestion only")
-    wp_field = {"title": "title", "h1": "title", "meta_description": "meta_desc"}[field]
-    item = wp_api.get_item(page.wp_base, page.wp_id, site=site)
-    if wp_field == "meta_desc" and item["supports_excerpt"]:
-        wp_field = "excerpt"
-    old = item["title"] if wp_field == "title" else item.get("excerpt_raw" if wp_field == "excerpt" else "meta_desc")
-    wp_api.update_item(page.wp_base, page.wp_id, {wp_field: value}, site=site)
-    store.add_audit("dashboard", f"onpage-{field}", f"{page.wp_base}:{page.wp_id}", {wp_field: old}, {wp_field: value})
+    kind = {"title": "title", "h1": "h1", "meta_description": "meta"}[field]
+    change = changes.propose_and_apply(kind, page.wp_base, page.wp_id, value, reason="on-page suggestion",
+                                       source="ai", site=site, actor=actor)
     # keep the crawl row honest until the next crawl
-    if field in ("title", "h1"):
+    if field == "meta_description":
+        page.meta_description = value
+    else:
         page.title = value if field == "title" else page.title
         page.h1 = [value] if field == "h1" or page.wp_base == "posts" else page.h1
-    else:
-        page.meta_description = value
     page.save(update_fields=["title", "h1", "meta_description"])
-    return {"applied": field, "wp_field": wp_field}
+    return {"applied": field, "change": change["id"], "wp_field": change["field"]}
 
 
 def invalidate():

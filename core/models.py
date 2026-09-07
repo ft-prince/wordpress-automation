@@ -141,3 +141,72 @@ class Page(models.Model):
     def indexable(self):
         return (self.status_code == 200 and self.is_html and not self.robots_blocked
                 and "noindex" not in (self.meta_robots or "").lower())
+
+
+class BusinessProfile(models.Model):
+    """What the business actually sells and to whom. Every SEO decision reads this first."""
+    site = models.CharField(max_length=48, unique=True)
+    name = models.CharField(max_length=120, default="", blank=True)
+    description = models.TextField(default="", blank=True)
+    products = models.JSONField(default=list)      # ["...", ...]
+    services = models.JSONField(default=list)
+    industries = models.JSONField(default=list)
+    audience = models.TextField(default="", blank=True)  # ICP in plain words
+    locations = models.JSONField(default=list)
+    markets = models.JSONField(default=list)       # countries / languages
+    priorities = models.JSONField(default=list)    # [{"topic": "...", "weight": 1-5}]
+    brand_voice = models.TextField(default="", blank=True)
+    facts = models.JSONField(default=list)         # approved claims the writer may use
+    competitors = models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class Change(models.Model):
+    """Every proposed write to WordPress. Nothing reaches the site without status=applied,
+    and `before` is kept so any applied change can be rolled back with one call."""
+    STATUSES = ("proposed", "applied", "rejected", "rolled_back", "failed")
+
+    site = models.CharField(max_length=48, db_index=True)
+    kind = models.CharField(max_length=32)          # title | meta | h1 | content | create-post | ...
+    wp_base = models.CharField(max_length=32, default="", blank=True)
+    wp_id = models.IntegerField(null=True, blank=True)
+    field = models.CharField(max_length=32, default="", blank=True)
+    before = models.JSONField(null=True, blank=True)
+    after = models.JSONField(null=True, blank=True)
+    reason = models.TextField(default="", blank=True)
+    source = models.CharField(max_length=32, default="ai")  # ai | human | rule
+    status = models.CharField(max_length=12, default="proposed", db_index=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.CharField(max_length=64, default="", blank=True)
+    error = models.TextField(default="", blank=True)
+
+
+class Brief(models.Model):
+    """SEO brief -> AI draft -> QA -> human approval -> WordPress draft. One row, one lifecycle."""
+    STATUSES = ("brief", "drafted", "qa", "approved", "published", "rejected")
+
+    site = models.CharField(max_length=48, db_index=True)
+    topic = models.ForeignKey(Topic, null=True, blank=True, on_delete=models.SET_NULL)
+    title = models.CharField(max_length=200)
+    primary_keyword = models.CharField(max_length=120, default="", blank=True)
+    secondary_keywords = models.JSONField(default=list)
+    intent = models.CharField(max_length=24, default="informational")
+    content_type = models.CharField(max_length=24, default="blog")
+    audience = models.TextField(default="", blank=True)
+    outline = models.JSONField(default=list)        # [{"h2": "...", "h3": [...], "notes": "..."}]
+    entities = models.JSONField(default=list)
+    faqs = models.JSONField(default=list)
+    internal_links = models.JSONField(default=list)  # [{"title","url"}]
+    cta = models.TextField(default="", blank=True)
+    word_target = models.IntegerField(default=900)
+    custom_instructions = models.TextField(default="", blank=True)
+    prompt_version = models.CharField(max_length=16, default="", blank=True)
+    draft_title = models.CharField(max_length=200, default="", blank=True)
+    draft_meta = models.CharField(max_length=300, default="", blank=True)
+    draft_html = models.TextField(default="", blank=True)
+    qa = models.JSONField(default=dict)
+    status = models.CharField(max_length=12, default="brief", db_index=True)
+    post_id = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)

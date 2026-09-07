@@ -38,7 +38,7 @@ def seo_suggest(request, item_id: int, body: SeoSuggest, site: str | None = None
 
 @router.post("/seo/items/{item_id}/apply")
 def seo_apply(request, item_id: int, body: SeoFix, site: str | None = None):
-    return seo.apply_fix(body.base, item_id, body.field, body.value, site=site)
+    return seo.apply_fix(body.base, item_id, body.field, body.value, site=site, actor=request.auth.username)
 
 
 @router.post("/seo/crawl")
@@ -69,4 +69,4 @@ def onpage_suggest(request, page_id: int, site: str | None = None):
 
 @router.post("/seo/pages/{page_id}/apply")
 def onpage_apply(request, page_id: int, body: OnpageApply, site: str | None = None):
-    return seo.apply_onpage(page_id, body.field, body.value, site=site)
+    return seo.apply_onpage(page_id, body.field, body.value, site=site, actor=request.auth.username)

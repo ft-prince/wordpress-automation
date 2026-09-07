@@ -81,3 +81,105 @@ class ApplyGuardTest(TestCase):
             seo.apply_onpage(p.pk, "title", "New")
         with self.assertRaises(ValueError):
             seo.apply_onpage(p.pk, "content", "New")
+
+
+class ChangeGateTest(TestCase):
+    """WordPress is faked: a dict per item. Proves propose -> apply -> rollback round-trips."""
+
+    def setUp(self):
+        from unittest import mock
+
+        from core import changes, sites
+
+        self.items = {("posts", 5): {"title": "Old title", "excerpt_raw": "old meta", "supports_excerpt": True,
+                                     "content_raw": "", "slug": "old", "meta_desc": ""}}
+
+        def get_item(base, item_id, site=None):
+            return dict(self.items[(base, item_id)])
+
+        def update_item(base, item_id, fields, site=None):
+            row = self.items[(base, item_id)]
+            for k, v in fields.items():
+                row["excerpt_raw" if k == "excerpt" else k] = v
+            return {"id": item_id, "saved": True}
+
+        patches = [mock.patch.object(changes.wp_api, "get_item", get_item),
+                   mock.patch.object(changes.wp_api, "update_item", update_item),
+                   mock.patch.object(sites, "env_for", lambda site=None: {"_site_id": "t", "WEBSITE_LINK": "https://t"})]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_apply_then_rollback(self):
+        from core import changes
+
+        c = changes.propose("title", "posts", 5, "New title", reason="test")
+        self.assertEqual((c["status"], c["before"]), ("proposed", "Old title"))
+        self.assertEqual(self.items[("posts", 5)]["title"], "Old title")  # nothing written yet
+        changes.apply(c["id"])
+        self.assertEqual(self.items[("posts", 5)]["title"], "New title")
+        changes.rollback(c["id"])
+        self.assertEqual(self.items[("posts", 5)]["title"], "Old title")
+        self.assertEqual(changes.listing()[0]["status"], "rolled_back")
+
+    def test_meta_lands_on_excerpt_when_supported(self):
+        from core import changes
+
+        c = changes.propose_and_apply("meta", "posts", 5, "A new description")
+        self.assertEqual(c["field"], "excerpt")
+        self.assertEqual(self.items[("posts", 5)]["excerpt_raw"], "A new description")
+
+    def test_noop_and_double_apply_rejected(self):
+        from core import changes
+
+        with self.assertRaises(ValueError):
+            changes.propose("title", "posts", 5, "Old title")
+        c = changes.propose_and_apply("title", "posts", 5, "X")
+        with self.assertRaises(ValueError):
+            changes.apply(c["id"])
+
+
+class BriefQaTest(TestCase):
+    def test_deterministic_checks_read_the_draft(self):
+        from core import briefs
+        from core.models import Brief
+
+        kw = "server response time"
+        body = "<h2>Why server response time matters</h2>" + "<p>" + (f"{kw} is the first thing to read. " + "Plain words follow here. " * 12) + "</p>"
+        body += "<h2>Measuring it</h2><p>" + "More sentences about latency and percentiles. " * 30 + "</p>"
+        body += '<h2>Next steps</h2><p>Read <a href="https://t/blog/x/">our guide</a>. ' + "Still more useful text. " * 20 + "</p>"
+        b = Brief.objects.create(site="t", title="t", primary_keyword=kw, word_target=200,
+                                 internal_links=[{"title": "x", "url": "https://t/blog/x/"}],
+                                 draft_title="How to Read Server Response Time Metrics",
+                                 draft_meta="Learn how to read server response time, latency percentiles and TTFB so you can find and fix your slowest pages quickly.",
+                                 draft_html=body)
+        checks = {c["code"]: c["ok"] for c in briefs.deterministic_checks(b)}
+        for code in ("title-has-keyword", "title-length", "meta-length", "keyword-early", "keyword-in-h2",
+                     "length", "headings", "internal-links", "no-h1", "no-dashes"):
+            self.assertTrue(checks[code], code)
+        b.draft_html = "<h1>x</h1><p>short – text</p>"
+        checks = {c["code"]: c["ok"] for c in briefs.deterministic_checks(b)}
+        self.assertFalse(checks["no-h1"])
+        self.assertFalse(checks["no-dashes"])
+        self.assertFalse(checks["length"])
+
+    def test_approve_never_publishes(self):
+        from core import briefs
+
+        with self.assertRaises(ValueError):
+            briefs.approve(1, status="publish")
+
+
+class ProfileTest(TestCase):
+    def test_save_validates_shape(self):
+        from unittest import mock
+
+        from core import profile, sites
+
+        with mock.patch.object(sites, "env_for", lambda site=None: {"_site_id": "t", "WEBSITE_LINK": "https://t"}):
+            self.assertTrue(profile.get()["is_empty"])
+            with self.assertRaises(ValueError):
+                profile.save({"products": "not a list"})
+            saved = profile.save({"name": "Acme", "products": ["Widget"], "facts": ["Founded 2020"]})
+            self.assertFalse(saved["is_empty"])
+            self.assertIn("Founded 2020", profile.context())
