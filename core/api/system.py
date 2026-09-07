@@ -166,11 +166,15 @@ def seo_tiles(site):
 def alerts_for(site):
     """Everything that needs the user's attention, one list."""
     items = []
+    site_id = site or sites.default_id()
     fresh = freshness(site)
     if fresh["crawl_days"] is None:
         items.append({"level": "warn", "text": "No crawl yet - open SEO and crawl the site so the technical audit has data"})
     elif fresh["crawl_days"] > CRAWL_STALE_DAYS:
         items.append({"level": "warn", "text": f"Crawl is {fresh['crawl_days']} days old - re-crawl for a current technical audit"})
+    last_gsc = Sync.objects.filter(site=site_id, source="gsc").order_by("-id").first()
+    if last_gsc and last_gsc.error:
+        items.append({"level": "warn", "text": f"Search Console sync: {last_gsc.error}"})
     if fresh["gsc_days"] is not None and fresh["gsc_days"] > GSC_STALE_DAYS:
         items.append({"level": "warn", "text": f"Search Console data is {fresh['gsc_days']} days old - run sync-google"})
     pending = Change.objects.filter(site=site or sites.default_id(), status="proposed").count()

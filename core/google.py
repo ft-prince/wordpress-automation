@@ -152,12 +152,21 @@ def sync_gsc(site=None, days=DEFAULT_DAYS, log=print):
             for r in rows], batch_size=1000)
         sync.rows = len(rows)
     except Exception as exc:
-        sync.error = str(exc)[:500]
+        sync.error = _friendly(exc)
         raise
     finally:
         sync.finished_at = timezone.now()
         sync.save()
     return sync.rows
+
+
+def _friendly(exc):
+    text = str(exc)
+    if "sufficient permission" in text:
+        return "Your Google account is a restricted user on this property. Ask its owner for Full permission."
+    if "has not been used in project" in text or "is disabled" in text:
+        return "That Google API is not enabled in the Cloud project. Enable it and sync again."
+    return text[:500]
 
 
 def sync_ga4(site=None, days=DEFAULT_DAYS, log=print):
@@ -192,7 +201,7 @@ def sync_ga4(site=None, days=DEFAULT_DAYS, log=print):
             for r in rows], batch_size=1000)
         sync.rows = len(rows)
     except Exception as exc:
-        sync.error = str(exc)[:500]
+        sync.error = _friendly(exc)
         raise
     finally:
         sync.finished_at = timezone.now()

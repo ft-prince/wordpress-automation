@@ -21,6 +21,14 @@ if __name__ == "__main__":
             print(f"{name}: {rows} rows stored")
         except ValueError as exc:
             print(f"{name}: skipped - {exc}")
+        except RuntimeError as exc:
+            if "sufficient permission" in str(exc):
+                print(f"{name}: skipped - the connected Google account is only a restricted user on this "
+                      f"property. Ask the property owner to grant it Full permission "
+                      f"(Search Console > Settings > Users and permissions).")
+            else:
+                print(f"{name}: FAILED - {exc}", file=sys.stderr)
+                failed += 1
         except Exception as exc:
             print(f"{name}: FAILED - {exc}", file=sys.stderr)
             failed += 1
