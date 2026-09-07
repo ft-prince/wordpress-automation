@@ -1,7 +1,7 @@
 // WordPress content sections: connection, alerts, pipeline, published, upcoming, performance.
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { Empty, fmtTime } from './bits'
+import { Empty, fmtTime, Spinner } from './bits'
 import SeoChip from './SeoChip'
 
 const wpApi = {
@@ -245,19 +245,65 @@ export function UpcomingPosts({ notify }) {
   )
 }
 
-export function Performance() {
-  // WP core exposes no view/click metrics. Honest empty state beats fake numbers.
+export function Performance({ onNavigate }) {
+  const [d, setD] = useState(null)
+  const [st, setSt] = useState(null)
+  useEffect(() => {
+    api.googleStatus().then(setSt).catch(() => setSt({ connected: false }))
+    api.insights().then(setD).catch(() => setD({}))
+  }, [])
+  if (!st || !d) return <Section title="Search performance"><Spinner label="loading search data…" /></Section>
+  const r = d.report
+  const hasData = st.connected && r && (r.search.now.impressions > 0 || r.organic.now.sessions > 0)
+  if (!hasData) {
+    return (
+      <Section title="Search performance">
+        <div className="flex items-center gap-4 py-2 text-sm text-dim">
+          <svg viewBox="0 0 48 32" className="h-10 w-14" aria-hidden="true">
+            <path d="M4 26 14 18l8 4 10-10 8 6" fill="none" stroke="var(--color-dim)" strokeWidth="2" strokeDasharray="3 3" />
+            <circle cx="40" cy="8" r="3" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" />
+          </svg>
+          <p>
+            {st.connected ? 'Google is connected but no search data has been synced for this site yet. ' : 'Connect Google Search Console and GA4 on the Sites page. '}
+            This graph then shows daily clicks and impressions, organic sessions and conversions for the last 28 days.
+          </p>
+          <button className="ml-auto rounded-lg border border-edge px-3 py-1.5 text-xs hover:border-accent" onClick={() => onNavigate?.(st.connected ? 'performance' : 'sites')}>{st.connected ? 'Open Performance' : 'Open Sites'}</button>
+        </div>
+      </Section>
+    )
+  }
+  const daily = r.daily || []
+  const maxC = Math.max(...daily.map((x) => x.clicks), 1)
+  const maxI = Math.max(...daily.map((x) => x.impressions), 1)
+  const W = 600, H = 120, pad = 4
+  const x = (i) => pad + (i / Math.max(daily.length - 1, 1)) * (W - pad * 2)
+  const line = (key, max) => daily.map((p, i) => `${x(i)},${H - pad - (p[key] / max) * (H - pad * 2)}`).join(' ')
+  const pct = (a, b) => (b ? `${a >= b ? '+' : ''}${Math.round(((a - b) / b) * 100)}%` : '')
   return (
-    <Section title="Post performance">
-      <div className="flex items-center gap-4 py-2 text-sm text-dim">
-        <svg viewBox="0 0 48 32" className="h-10 w-14" aria-hidden="true">
-          <path d="M4 26 14 18l8 4 10-10 8 6" fill="none" stroke="var(--color-dim)" strokeWidth="2" strokeDasharray="3 3" />
-          <circle cx="40" cy="8" r="3" fill="none" stroke="var(--color-accent)" strokeWidth="1.5" />
-        </svg>
-        <p>
-          WordPress core has no analytics API. Connect <span className="text-ink">Jetpack Stats</span> or{' '}
-          <span className="text-ink">Google Analytics</span> and this panel lights up with views, clicks and engagement.
-        </p>
+    <Section title="Search performance · last 28 days" right={<button className="rounded-lg border border-edge px-3 py-1.5 text-xs hover:border-accent" onClick={() => onNavigate?.("performance")}>Open Performance →</button>}>
+      <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+        <div>
+          <svg viewBox={`0 0 ${W} ${H}`} className="h-32 w-full" role="img" aria-label="daily clicks and impressions">
+            {[0.25, 0.5, 0.75].map((f) => <line key={f} x1={pad} x2={W - pad} y1={H * f} y2={H * f} stroke="var(--color-edge)" strokeWidth="1" />)}
+            <polyline points={line('impressions', maxI)} fill="none" stroke="var(--color-dim)" strokeWidth="1.5" strokeDasharray="4 3" />
+            <polyline points={line('clicks', maxC)} fill="none" stroke="var(--color-run)" strokeWidth="2" />
+          </svg>
+          <div className="mt-1 flex gap-4 text-xs text-dim mono">
+            <span><span className="inline-block h-0.5 w-4 align-middle" style={{ background: 'var(--color-run)' }} /> clicks (max {maxC}/day)</span>
+            <span><span className="inline-block h-0.5 w-4 border-t border-dashed align-middle" style={{ borderColor: 'var(--color-dim)' }} /> impressions (max {maxI}/day)</span>
+            <span className="ml-auto">{r.window.from} → {r.window.to}</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          {[['clicks', r.search.now.clicks, r.search.before.clicks], ['impressions', r.search.now.impressions, r.search.before.impressions],
+            ['queries', r.search.now.queries, null], ['organic sessions', r.organic.now.sessions, r.organic.before.sessions]].map(([l, v, b]) => (
+            <div key={l} className="rounded-lg border border-edge bg-base px-3 py-2">
+              <div className="text-lg font-bold mono">{v}{b != null && b > 0 && <span className="ml-1 text-[10px]" style={{ color: v >= b ? 'var(--color-ok)' : 'var(--color-bad)' }}>{pct(v, b)}</span>}</div>
+              <div className="uppercase tracking-widest text-dim">{l}</div>
+            </div>
+          ))}
+          <div className="col-span-2 text-dim">{(d.refresh_plan || []).length} page(s) need work · {(d.page1 || []).length} page-1 opportunities · {(d.cannibalization || []).length} cannibalization</div>
+        </div>
       </div>
     </Section>
   )

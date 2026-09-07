@@ -14,6 +14,7 @@ import Topics from './components/Topics'
 import Content from './components/Content'
 import Keywords from './components/Keywords'
 import Performance from './components/Performance'
+import PageIntro from './components/PageIntro'
 import { Secrets, Audit, Users } from './components/SecretsAudit'
 
 const NAV = [
@@ -254,6 +255,7 @@ export default function App() {
           </div>
         </header>
         <main className="p-6" key={siteVersion}>
+          {page !== 'job' && <PageIntro page={page} />}
           {page === 'overview' && <Overview onNavigate={navigate} notify={notify} />}
           {page === 'topics' && <Topics notify={notify} />}
           {page === 'posts' && <Posts notify={notify} initialEdit={jobId} />}

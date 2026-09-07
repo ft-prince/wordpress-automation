@@ -18,7 +18,8 @@ class CoreConfig(AppConfig):
         if NO_SCHEDULER_COMMANDS & set(sys.argv):
             return
         # runserver forks an autoreloader parent; only the child (RUN_MAIN) serves.
-        if "runserver" in sys.argv and os.environ.get("RUN_MAIN") != "true":
+        # With --noreload there is no fork and RUN_MAIN is never set.
+        if "runserver" in sys.argv and "--noreload" not in sys.argv and os.environ.get("RUN_MAIN") != "true":
             return
         from core import scheduler
 

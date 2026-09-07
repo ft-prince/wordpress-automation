@@ -161,7 +161,7 @@ export default function Overview({ onNavigate, notify }) {
         </div>
       </div>
       <PublishedPosts notify={notify} />
-      <Performance />
+      <Performance onNavigate={onNavigate} />
     </div>
   )
 }

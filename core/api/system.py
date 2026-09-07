@@ -10,7 +10,7 @@ from django.db.models import Sum
 
 from core import costs, registry, roles, scheduler, secrets, sites, store, topics, wp_api
 from core.models import Brief, Change, Crawl, GscRow, Sync
-from core.api.jobs import job_site
+from core.api.jobs import job_for_site
 
 router = Router()
 
@@ -186,7 +186,7 @@ def alerts_for(site):
     for run in store.runs(status="timeout", limit=3, site=scope):
         items.append({"level": "error", "text": f"{run['job_id']} run #{run['id']} timed out"})
     for job in registry.all_jobs():
-        if job.get("enabled", True) is False and job_site(job) == scope:
+        if job.get("enabled", True) is False and job_for_site(job, scope):
             items.append({"level": "warn", "text": f"job '{job['name']}' is disabled"})
     try:
         for post in wp_api.posts("future", 20, site=site):

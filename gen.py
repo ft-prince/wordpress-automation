@@ -10,6 +10,8 @@ from wp import TIMEOUT_SECONDS, load_env
 GROQ_URL = "https://api.groq.com/openai/v1"
 # hardcoded default; override with GROQ_MODEL in .env. `python3 gen.py --models` lists live ones.
 DEFAULT_MODEL = "openai/gpt-oss-120b"
+FALLBACK_FROM = DEFAULT_MODEL
+FALLBACK_MODEL = "openai/gpt-oss-20b"  # used only when the 120b daily token cap is hit
 
 
 def api_key(env):
@@ -114,6 +116,9 @@ def _post(path, payload, key, _retried=False, purpose="gen"):
             return data
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf8", "replace")[:400]
+        # Daily cap on the big model: fall back to the small one (own quota) instead of dying.
+        if exc.code == 429 and "per day" in detail and payload.get("model") == FALLBACK_FROM and not _retried:
+            return _post(path, {**payload, "model": FALLBACK_MODEL}, key, _retried=True, purpose=purpose)
         # Free tier is 8k tokens/min — wait out a 429 once instead of failing the run.
         if exc.code == 429 and not _retried:
             wait_match = re.search(r"try again in ([\d.]+)s", detail)

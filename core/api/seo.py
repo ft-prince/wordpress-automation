@@ -5,6 +5,15 @@ from ninja.errors import HttpError
 from core import linking, roles, runner, seo, store
 
 router = Router()
+
+
+def _last(job_id, site):
+    from core import sites
+
+    rows = store.runs(job_id=job_id, limit=1, site=sites.env_for(site)["_site_id"])
+    return rows[0] if rows else None
+
+
 CRAWL_JOB = "crawl-site"
 PSI_JOB = "pagespeed"
 
@@ -46,9 +55,9 @@ def seo_apply(request, item_id: int, body: SeoFix, site: str | None = None):
 @router.post("/seo/crawl")
 def start_crawl(request, site: str | None = None):
     """Runs the crawl-site automation so it streams logs like every other job."""
-    last = store.last_run(CRAWL_JOB)
+    last = _last(CRAWL_JOB, site)
     if last and last["status"] == "running":
-        raise HttpError(409, "a crawl is already running")
+        raise HttpError(409, "a crawl is already running for this site")
     runner.execute_async(CRAWL_JOB, trigger="manual", extra_args={"site": site} if site else None)
     return {"started": True, "job_id": CRAWL_JOB}
 
@@ -59,7 +68,7 @@ def start_pagespeed(request, site: str | None = None):
 
     if not pagespeed.configured():
         raise HttpError(400, "add GOOGLE_API_KEY in Secrets first")
-    last = store.last_run(PSI_JOB)
+    last = _last(PSI_JOB, site)
     if last and last["status"] == "running":
         raise HttpError(409, "a PageSpeed run is already going")
     runner.execute_async(PSI_JOB, trigger="manual", extra_args={"site": site} if site else None)
@@ -69,7 +78,7 @@ def start_pagespeed(request, site: str | None = None):
 @router.get("/seo/technical")
 def technical(request, site: str | None = None):
     report = seo.technical_report(site)
-    return {**report, "run": store.last_run(CRAWL_JOB), "psi_run": store.last_run(PSI_JOB)}
+    return {**report, "run": _last(CRAWL_JOB, site), "psi_run": _last(PSI_JOB, site)}
 
 
 @router.get("/seo/pages/{page_id}")

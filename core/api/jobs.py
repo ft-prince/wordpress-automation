@@ -38,7 +38,13 @@ class JobCreate(Schema):
 
 
 def job_site(job):
-    return (job.get("args") or {}).get("site") or sites.default_id() or ""
+    """Explicit args.site pins a job to one site; otherwise it runs against whichever site
+    is selected (the dashboard passes ?site= on Run), so it belongs to every site."""
+    return (job.get("args") or {}).get("site") or ""
+
+
+def job_for_site(job, site):
+    return not site or job_site(job) in ("", site)
 
 
 def decorate(job):
@@ -61,10 +67,7 @@ def decorate(job):
 
 @router.get("/jobs")
 def list_jobs(request, site: str | None = None):
-    jobs = [decorate(j) for j in registry.all_jobs()]
-    if site:
-        jobs = [j for j in jobs if j["target_site"] == site]
-    return jobs
+    return [decorate(j) for j in registry.all_jobs() if job_for_site(j, site)]
 
 
 @router.post("/jobs")
@@ -170,7 +173,7 @@ def stop_run(request, run_id: int):
 
 @router.get("/metrics")
 def metrics(request, site: str | None = None):
-    jobs = [j for j in registry.all_jobs() if not site or job_site(j) == site]
+    jobs = [j for j in registry.all_jobs() if job_for_site(j, site)]
     return {
         **store.metrics(site=site),
         "jobs_total": len(jobs),
