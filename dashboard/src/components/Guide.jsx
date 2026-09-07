@@ -121,7 +121,7 @@ export default function Guide() {
       <div className="max-w-3xl space-y-8">
         {SECTIONS.map((s) => (
           <section key={s.id} id={`guide-${s.id}`} className="rounded-xl border border-edge bg-panel p-5">
-            <h2 className="mb-3 text-base font-bold">{s.title}</h2>
+            <h2 className="mb-3 text-base font-bold text-ink">{s.title}</h2>
             {s.body?.map((p, i) => <p key={i} className="mb-2 text-sm text-dim">{p}</p>)}
             {s.what && (
               <dl className="space-y-3 text-sm">
