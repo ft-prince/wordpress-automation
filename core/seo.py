@@ -264,6 +264,7 @@ def technical_report(site=None):
         "issues": report.get("issues"),
         "pages": [{"id": p.pk, "url": p.url, "status": p.status_code, "title": p.title, "words": p.word_count,
                    "score": report.get("page_scores", {}).get(p.url), "wp_base": p.wp_base, "wp_id": p.wp_id,
+                   "psi": p.psi_score, "lcp_ms": p.lcp_ms,
                    "issues": len(report.get("per_page", {}).get(p.url, []))}
                   for p in sorted(pages, key=lambda p: report.get("page_scores", {}).get(p.url, 100))],
     }
@@ -281,6 +282,8 @@ def page_detail(page_id, site=None):
         "meta_robots": page.meta_robots, "in_sitemap": page.in_sitemap, "depth": page.depth,
         "response_ms": page.response_ms, "jsonld_types": page.jsonld_types,
         "internal_links": len(page.internal_links), "external_links": len(page.external_links),
+        "psi": {"score": page.psi_score, "lcp_ms": page.lcp_ms, "cls": page.cls, "tbt_ms": page.tbt_ms, "inp_ms": page.inp_ms,
+                "at": page.psi_at.isoformat(timespec="seconds") if page.psi_at else None},
         "wp_base": page.wp_base, "wp_id": page.wp_id,
         "score": report["page_scores"].get(page.url), "issues": report["per_page"].get(page.url, []),
     }

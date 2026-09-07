@@ -1,0 +1,20 @@
+id: pagespeed
+name: Core Web Vitals check
+description: Runs PageSpeed Insights (mobile) on the top 30 crawled pages and feeds
+  LCP / CLS / TBT / INP into the technical SEO audit
+runtime: python
+entrypoint: pagespeed_site.py
+schedule: 0 5 * * 2
+enabled: true
+timeout_seconds: 1800
+retries:
+  count: 0
+  backoff_seconds: 60
+args:
+  max-pages: 30
+env:
+- GOOGLE_API_KEY
+tags:
+- seo
+- performance
+alert_on_failure: true

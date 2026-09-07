@@ -6,6 +6,7 @@ from core import linking, roles, runner, seo, store
 
 router = Router()
 CRAWL_JOB = "crawl-site"
+PSI_JOB = "pagespeed"
 
 
 class SeoSuggest(Schema):
@@ -52,10 +53,23 @@ def start_crawl(request, site: str | None = None):
     return {"started": True, "job_id": CRAWL_JOB}
 
 
+@router.post("/seo/pagespeed")
+def start_pagespeed(request, site: str | None = None):
+    from core import pagespeed
+
+    if not pagespeed.configured():
+        raise HttpError(400, "add GOOGLE_API_KEY in Secrets first")
+    last = store.last_run(PSI_JOB)
+    if last and last["status"] == "running":
+        raise HttpError(409, "a PageSpeed run is already going")
+    runner.execute_async(PSI_JOB, trigger="manual", extra_args={"site": site} if site else None)
+    return {"started": True, "job_id": PSI_JOB}
+
+
 @router.get("/seo/technical")
 def technical(request, site: str | None = None):
     report = seo.technical_report(site)
-    return {**report, "run": store.last_run(CRAWL_JOB)}
+    return {**report, "run": store.last_run(CRAWL_JOB), "psi_run": store.last_run(PSI_JOB)}
 
 
 @router.get("/seo/pages/{page_id}")

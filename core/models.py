@@ -126,6 +126,14 @@ class Page(models.Model):
     mixed_content = models.IntegerField(default=0)
     security_headers = models.JSONField(default=dict)
 
+    # PageSpeed Insights (mobile lab + field data when Google has it)
+    psi_score = models.IntegerField(null=True, blank=True)
+    lcp_ms = models.IntegerField(null=True, blank=True)
+    cls = models.FloatField(null=True, blank=True)
+    tbt_ms = models.IntegerField(null=True, blank=True)
+    inp_ms = models.IntegerField(null=True, blank=True)
+    psi_at = models.DateTimeField(null=True, blank=True)
+
     # Which WordPress item renders this URL, so approved fixes know where to write.
     wp_base = models.CharField(max_length=32, default="", blank=True)
     wp_id = models.IntegerField(null=True, blank=True)
@@ -232,6 +240,7 @@ class Cluster(models.Model):
     reason = models.TextField(default="", blank=True)
     priority = models.IntegerField(default=50)      # business priority x opportunity, 0-100
     approved = models.BooleanField(default=False)   # SEO user signed off on the mapping
+    serp = models.JSONField(default=dict)           # last SERP analysis for the primary keyword
     created_at = models.DateTimeField(default=timezone.now)
 
 
@@ -303,3 +312,11 @@ class LlmCall(models.Model):
     prompt_tokens = models.IntegerField(default=0)
     completion_tokens = models.IntegerField(default=0)
     cost_usd = models.FloatField(default=0)
+
+
+class SerpResult(models.Model):
+    """Cached web-search results per query (from Groq browser_search). Shared across sites."""
+    query = models.CharField(max_length=200, db_index=True)
+    country = models.CharField(max_length=4, default="", blank=True)
+    fetched_at = models.DateTimeField(default=timezone.now)
+    results = models.JSONField(default=list)   # [{"url","title","snippet","domain"}]

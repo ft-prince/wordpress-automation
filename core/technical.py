@@ -63,6 +63,11 @@ RULES = {
     "img-missing-alt": ("images", "low", "Images without alt text", "Alt text is accessibility and image-search relevance."),
     "page-slow": ("performance", "medium", "Slow response", f"Server took over {SLOW_MS} ms to answer."),
     "page-heavy": ("performance", "low", "Heavy HTML", "HTML over 1.5 MB before any assets."),
+    "cwv-lcp-poor": ("performance", "high", "LCP poor (Core Web Vital)", "Largest Contentful Paint over 4 s on mobile - fails Core Web Vitals."),
+    "cwv-lcp-slow": ("performance", "medium", "LCP needs improvement", "Largest Contentful Paint 2.5-4 s on mobile."),
+    "cwv-cls-poor": ("performance", "medium", "Layout shift (CLS) high", "Cumulative Layout Shift over 0.1 on mobile."),
+    "cwv-inp-poor": ("performance", "medium", "INP poor", "Interaction to Next Paint over 200 ms for real users."),
+    "psi-low": ("performance", "medium", "Low PageSpeed score", "Lighthouse mobile performance under 50."),
     "jsonld-invalid": ("schema", "medium", "Invalid JSON-LD", "Structured data that does not parse is ignored."),
     "jsonld-missing": ("schema", "low", "No structured data", "No JSON-LD found on the page."),
     "http-page": ("security", "high", "Served over HTTP", "Not HTTPS - browsers flag it and Google demotes it."),
@@ -188,6 +193,16 @@ def analyze(crawl, pages):
             add("page-slow", p, ms=p.response_ms)
         if p.bytes > HEAVY_BYTES:
             add("page-heavy", p, bytes=p.bytes)
+        if p.lcp_ms is not None and p.lcp_ms > 4000:
+            add("cwv-lcp-poor", p, lcp_ms=p.lcp_ms)
+        elif p.lcp_ms is not None and p.lcp_ms > 2500:
+            add("cwv-lcp-slow", p, lcp_ms=p.lcp_ms)
+        if p.cls is not None and p.cls > 0.1:
+            add("cwv-cls-poor", p, cls=p.cls)
+        if p.inp_ms is not None and p.inp_ms > 200:
+            add("cwv-inp-poor", p, inp_ms=p.inp_ms)
+        if p.psi_score is not None and p.psi_score < 50:
+            add("psi-low", p, score=p.psi_score)
         if p.jsonld_error:
             add("jsonld-invalid", p, error=p.jsonld_error)
         elif not p.jsonld_types:

@@ -1,7 +1,7 @@
 """Keyword research, clusters, URL mapping, cannibalization, content gaps."""
 from ninja import Router, Schema
 
-from core import keywords
+from core import keywords, serp
 
 router = Router()
 
@@ -75,43 +75,58 @@ def gaps(request, site: str | None = None):
     return keywords.gaps(site)
 
 
-@router.post("/keywords/{keyword_id}/move")
+@router.post("/keywords/{int:keyword_id}/move")
 def move_keyword(request, keyword_id: int, body: Move):
     return keywords.move_keyword(keyword_id, body.cluster_id)
 
 
-@router.post("/keywords/{keyword_id}/primary")
+@router.post("/keywords/{int:keyword_id}/primary")
 def set_primary(request, keyword_id: int):
     return keywords.set_primary(keyword_id)
 
 
-@router.delete("/keywords/{keyword_id}")
+@router.delete("/keywords/{int:keyword_id}")
 def delete_keyword(request, keyword_id: int):
     keywords.delete_keyword(keyword_id)
     return {"deleted": True}
 
 
-@router.get("/clusters/{cluster_id}")
+@router.get("/clusters/{int:cluster_id}")
 def cluster_detail(request, cluster_id: int):
     return keywords.cluster_detail(cluster_id)
 
 
-@router.patch("/clusters/{cluster_id}")
+@router.patch("/clusters/{int:cluster_id}")
 def patch_cluster(request, cluster_id: int, body: ClusterPatch):
     return keywords.update_cluster(cluster_id, **body.dict())
 
 
-@router.post("/clusters/{cluster_id}/merge")
+@router.post("/clusters/{int:cluster_id}/merge")
 def merge_cluster(request, cluster_id: int, body: Merge):
     return keywords.merge(cluster_id, body.from_id)
 
 
-@router.post("/clusters/{cluster_id}/split")
+@router.post("/clusters/{int:cluster_id}/split")
 def split_cluster(request, cluster_id: int, body: Split):
     return keywords.split(cluster_id, body.keyword_ids, body.name)
 
 
-@router.delete("/clusters/{cluster_id}")
+@router.delete("/clusters/{int:cluster_id}")
 def delete_cluster(request, cluster_id: int):
     keywords.delete_cluster(cluster_id)
     return {"deleted": True}
+
+
+@router.post("/clusters/{int:cluster_id}/serp")
+def cluster_serp(request, cluster_id: int, site: str | None = None):
+    return serp.analyze_cluster(cluster_id, site)
+
+
+@router.post("/keywords/serp")
+def serp_top(request, site: str | None = None, limit: int = 10):
+    return serp.analyze_top(site, limit)
+
+
+@router.get("/keywords/competitors")
+def competitors(request, site: str | None = None):
+    return serp.competitors(site)

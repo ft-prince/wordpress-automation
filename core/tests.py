@@ -375,3 +375,45 @@ class RolesSchemaLinksCostsTest(TestCase):
         costs.record({"bogus": True})  # must not raise
         self.assertEqual(LlmCall.objects.count(), 1)
         self.assertAlmostEqual(costs.summary()["today"]["usd"], 0.75)
+
+
+class SerpPagespeedTest(TestCase):
+    def test_parse_tool_results_and_dedupe(self):
+        from core import serp
+
+        tools = [{"type": "browser_search", "search_results": {"results": [
+            {"title": "A", "url": "https://www.acme.com/x", "content": "s"},
+            {"title": "Y", "url": "https://www.youtube.com/watch?v=1"},
+            {"title": "A again", "url": "https://www.acme.com/x"},
+            {"title": "B", "url": "https://b.example/"}]}}]
+        rows = serp._dedupe(serp.parse_tool_results(tools))
+        self.assertEqual([r["domain"] for r in rows], ["acme.com", "b.example"])
+        self.assertEqual(rows[0]["snippet"], "s")
+
+    def test_competitors_aggregate(self):
+        from unittest import mock
+
+        from core import serp, sites
+        from core.models import Cluster
+
+        with mock.patch.object(sites, "env_for", lambda site=None: {"_site_id": "t", "WEBSITE_LINK": "https://t.example"}):
+            Cluster.objects.create(site="t", name="a", serp={"keyword": "k1", "results": [
+                {"url": "https://rival.com/1", "domain": "rival.com", "rank": 1}, {"url": "https://t.example/", "domain": "t.example", "rank": 2}]})
+            Cluster.objects.create(site="t", name="b", serp={"keyword": "k2", "results": [
+                {"url": "https://rival.com/2", "domain": "rival.com", "rank": 3}, {"url": "https://other.io/", "domain": "other.io", "rank": 1}]})
+            out = serp.competitors()
+        self.assertEqual(out[0]["domain"], "rival.com")
+        self.assertEqual((out[0]["clusters"], out[0]["best_rank"], out[0]["keywords"]), (2, 1, ["k1", "k2"]))
+        self.assertNotIn("t.example", [c["domain"] for c in out])
+
+    def test_cwv_rules(self):
+        from core import technical
+        from core.models import Crawl, Page
+
+        c = Crawl.objects.create(site="t", status="done", sitemap_url="x")
+        Page.objects.create(crawl=c, url="https://t/", final_url="https://t/", status_code=200, content_type="text/html",
+                            title="A perfectly sized title for testing here", meta_description="m" * 90, h1=["h"], word_count=400,
+                            canonical="https://t/", lang="en", jsonld_types=["WebPage"], lcp_ms=5200, cls=0.3, psi_score=40, inp_ms=350)
+        codes = {g["code"] for g in technical.analyze(c, list(c.pages.all()))["issues"]}
+        self.assertTrue({"cwv-lcp-poor", "cwv-cls-poor", "psi-low", "cwv-inp-poor"} <= codes)
+        self.assertNotIn("cwv-lcp-slow", codes)

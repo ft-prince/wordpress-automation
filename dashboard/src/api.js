@@ -115,6 +115,10 @@ export const api = {
   briefSchema: (id) => send(`/api/briefs/${id}/schema` + sq(), 'POST'),
   proposeInbound: (body) => send('/api/links/propose-inbound' + sq(), 'POST', body),
   pageLinks: (id) => send(`/api/seo/pages/${id}/links` + sq(), 'POST'),
+  clusterSerp: (id) => send(`/api/clusters/${id}/serp` + sq(), 'POST'),
+  serpTop: () => send('/api/keywords/serp' + sq(), 'POST'),
+  competitors: () => authedFetch('/api/keywords/competitors' + sq()),
+  startPagespeed: () => send('/api/seo/pagespeed' + sq(), 'POST'),
   // google + insights
   googleStatus: () => authedFetch('/api/google/status' + sq()),
   googleAuthUrl: () => authedFetch('/api/google/auth-url'),

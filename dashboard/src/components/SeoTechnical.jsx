@@ -85,6 +85,7 @@ function PageDrawer({ pageId, notify, onClose, onChanged }) {
           <span className="text-lg font-bold mono" style={{ color: scoreTone(page.score) }}>{page.score ?? '—'}%</span>
           <a href={page.url} target="_blank" rel="noreferrer" className="text-dim underline-offset-2 hover:underline">open page</a>
           <span className="mono text-xs text-dim">HTTP {page.status} · {page.word_count} words · {page.h2_count} H2 · {page.internal_links} links in body · depth {page.depth}</span>
+          {page.psi?.score != null && <span className="mono text-xs" style={{ color: scoreTone(page.psi.score) }}>PSI {page.psi.score} · LCP {(page.psi.lcp_ms / 1000).toFixed(1)}s · CLS {page.psi.cls} · TBT {page.psi.tbt_ms}ms{page.psi.inp_ms ? ` · INP ${page.psi.inp_ms}ms` : ''}</span>}
           {page.wp_base ? <span className="mono text-xs" style={{ color: 'var(--color-ok)' }}>WP {page.wp_base}#{page.wp_id}</span>
             : <span className="mono text-xs text-dim">not a WordPress item (theme/template)</span>}
         </div>
@@ -167,6 +168,8 @@ export default function SeoTechnical({ notify }) {
         </div>
         <div className="text-right">
           <button className={btnPrimary} disabled={running} onClick={start}>{running ? 'Crawling…' : crawl ? 'Re-crawl' : 'Crawl site'}</button>
+          {crawl?.status === 'done' && <button className={`${btnGhost} ml-2`} disabled={data.psi_run?.status === 'running'} title="PageSpeed Insights on the top 30 pages (mobile)"
+            onClick={() => api.startPagespeed().then(() => { notify('Core Web Vitals check started - see Logs'); load() }).catch((e) => notify(e.message, true))}>{data.psi_run?.status === 'running' ? 'Measuring…' : 'Core Web Vitals'}</button>}
           {crawl?.finished_at && <p className="mt-1 text-xs text-dim mono">crawled {new Date(crawl.finished_at).toLocaleString()}</p>}
           {running && <p className="mt-1 text-xs text-dim mono">running · see Logs for progress</p>}
         </div>
@@ -200,7 +203,7 @@ export default function SeoTechnical({ notify }) {
           <div className="overflow-hidden rounded-xl border border-edge">
             <table className="w-full text-xs">
               <thead className="bg-panel text-left uppercase tracking-widest text-dim">
-                <tr><th className="px-3 py-2">score</th><th className="px-3 py-2">url</th><th className="px-3 py-2">title</th><th className="px-3 py-2">http</th><th className="px-3 py-2">words</th><th className="px-3 py-2">issues</th></tr>
+                <tr><th className="px-3 py-2">score</th><th className="px-3 py-2">url</th><th className="px-3 py-2">title</th><th className="px-3 py-2">http</th><th className="px-3 py-2">words</th><th className="px-3 py-2">psi</th><th className="px-3 py-2">lcp</th><th className="px-3 py-2">issues</th></tr>
               </thead>
               <tbody>
                 {pages.filter((p) => !filter || p.url.includes(filter) || (p.title || '').toLowerCase().includes(filter.toLowerCase())).slice(0, 300).map((p) => (
@@ -210,6 +213,8 @@ export default function SeoTechnical({ notify }) {
                     <td className="max-w-xs truncate px-3 py-1.5" title={p.title}>{p.title || <span className="text-dim">(no title)</span>}</td>
                     <td className="px-3 py-1.5 mono" style={p.status && p.status >= 400 ? { color: SEV.high } : undefined}>{p.status ?? 'ERR'}</td>
                     <td className="px-3 py-1.5 mono">{p.words}</td>
+                    <td className="px-3 py-1.5 mono" style={p.psi != null ? { color: scoreTone(p.psi) } : undefined}>{p.psi ?? '—'}</td>
+                    <td className="px-3 py-1.5 mono" style={p.lcp_ms > 4000 ? { color: SEV.high } : p.lcp_ms > 2500 ? { color: SEV.medium } : undefined}>{p.lcp_ms != null ? `${(p.lcp_ms / 1000).toFixed(1)}s` : '—'}</td>
                     <td className="px-3 py-1.5 mono">{p.issues}</td>
                   </tr>
                 ))}

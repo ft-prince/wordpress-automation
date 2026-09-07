@@ -42,13 +42,17 @@ export default function Keywords({ notify }) {
           {[['research', 'Research from profile'], ['cluster', 'Cluster loose keywords'], ['map', 'Map clusters to URLs']].map(([step, label]) => (
             <button key={step} className={btnGhost} disabled={!!busy} onClick={() => run(step, label)}>{busy === step ? 'Working…' : label}</button>
           ))}
+          <button className={btnGhost} disabled={!!busy} title="Web-search the top 10 clusters and validate intent against real results"
+            onClick={() => { setBusy('serp'); api.serpTop().then((r) => { notify(`SERP analysed ${r.analysed} cluster(s)${r.errors.length ? `, ${r.errors.length} failed` : ''}`); load() }).catch((e) => notify(e.message, true)).finally(() => setBusy('')) }}>
+            {busy === 'serp' ? 'Searching…' : 'Analyse SERPs (top 10)'}</button>
         </div>
       </div>
-      <Tabs tab={tab} setTab={setTab} items={[['clusters', 'Clusters & mapping'], ['loose', `Unclustered (${c.unclustered})`], ['cannibal', 'Cannibalization'], ['gaps', 'Content gaps & pillars']]} />
+      <Tabs tab={tab} setTab={setTab} items={[['clusters', 'Clusters & mapping'], ['loose', `Unclustered (${c.unclustered})`], ['cannibal', 'Cannibalization'], ['gaps', 'Content gaps & pillars'], ['competitors', 'SEO competitors']]} />
       {tab === 'clusters' && <Clusters data={data} reload={load} notify={notify} />}
       {tab === 'loose' && <Loose data={data} reload={load} notify={notify} />}
       {tab === 'cannibal' && <Cannibal notify={notify} />}
       {tab === 'gaps' && <Gaps notify={notify} />}
+      {tab === 'competitors' && <Competitors notify={notify} />}
     </div>
   )
 }
@@ -66,6 +70,7 @@ function Clusters({ data, reload, notify }) {
           <span className="mono text-[10px] uppercase text-dim">{cl.role}</span>
           <span className="text-xs text-dim">{cl.keywords.length} kw · {cl.keywords.find((k) => k.is_primary)?.text}</span>
           <span className="ml-auto mono text-xs" style={{ color: ACTION_TONE[cl.action] }}>{cl.action || 'unmapped'} {cl.target_url && short(cl.target_url)}</span>
+          {cl.serp?.intent && <span className="mono text-[10px]" style={{ color: cl.serp.intent_matches ? 'var(--color-ok)' : 'var(--color-bad)' }}>SERP {cl.serp.intent}{cl.serp.mixed ? ' (mixed)' : ''}{cl.serp.own_rank ? ` · you #${cl.serp.own_rank}` : ''}</span>}
           {cl.approved && <span className="mono text-xs" style={{ color: 'var(--color-ok)' }}>✓ approved</span>}
         </button>
       ))}
@@ -92,6 +97,7 @@ function ClusterDrawer({ cluster, all, notify, onClose }) {
           <label className="text-xs uppercase tracking-widest text-dim">Parent topic<input className={`${field} mt-1`} defaultValue={cl.parent_topic} onBlur={(e) => e.target.value !== cl.parent_topic && patch({ parent_topic: e.target.value })} /></label>
         </div>
         {cl.reason && <p className="text-xs text-dim">{cl.reason}</p>}
+        <SerpPanel cl={cl} setCl={setCl} notify={notify} />
         <div className="flex items-center gap-2">
           <button className={cl.approved ? btnGhost : btnPrimary} onClick={() => patch({ approved: !cl.approved })}>{cl.approved ? 'Un-approve mapping' : 'Approve mapping'}</button>
           <select className={`${field} ml-auto w-56`} value={mergeFrom} onChange={(e) => setMergeFrom(e.target.value)}><option value="">merge another cluster in…</option>{all.filter((x) => x.id !== cl.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
@@ -202,6 +208,50 @@ function Gaps({ notify }) {
           </div>
         ))}
       </section>
+    </div>
+  )
+}
+
+
+function SerpPanel({ cl, setCl, notify }) {
+  const [busy, setBusy] = useState(false)
+  const run = () => { setBusy(true); api.clusterSerp(cl.id).then((serp) => { setCl({ ...cl, serp }); notify('SERP analysed') }).catch((e) => notify(e.message, true)).finally(() => setBusy(false)) }
+  const s = cl.serp || {}
+  return (
+    <div className="rounded-lg border border-edge bg-base p-3 text-xs">
+      <div className="flex items-center gap-3">
+        <span className="uppercase tracking-widest text-dim">SERP check</span>
+        {s.fetched_at && <span className="text-dim mono">{s.keyword} · {new Date(s.fetched_at).toLocaleDateString()}</span>}
+        <button className={`${btnGhost} ml-auto`} disabled={busy} onClick={run}>{busy ? 'Searching…' : s.fetched_at ? 'Re-check' : 'Analyse SERP'}</button>
+      </div>
+      {s.fetched_at && (
+        <div className="mt-2 space-y-2">
+          <p>Real intent: <b style={{ color: s.intent_matches ? 'var(--color-ok)' : 'var(--color-bad)' }}>{s.intent}</b>{s.mixed && <span style={{ color: 'var(--color-accent)' }}> · mixed intent</span>} · ranking format: <b>{s.content_type}</b>{s.own_rank ? <span> · you rank <b>#{s.own_rank}</b></span> : <span className="text-dim"> · you are not in the top {s.results?.length}</span>}</p>
+          {s.serp_patterns?.length > 0 && <p className="text-dim">Titles have in common: {s.serp_patterns.join(' · ')}</p>}
+          {s.gaps?.length > 0 && <p><span style={{ color: 'var(--color-accent)' }}>Gaps vs top results:</span> {s.gaps.join(' · ')}</p>}
+          <p className="text-dim">{s.recommendation}</p>
+          <ol className="list-decimal pl-5 mono">
+            {(s.results || []).map((r) => <li key={r.url} style={r.own ? { color: 'var(--color-ok)' } : undefined}><a href={r.url} target="_blank" rel="noreferrer" className="hover:underline">{r.domain}</a> <span className="text-dim">{(r.title || '').slice(0, 70)}{r.words ? ` · ${r.words}w` : ''}</span></li>)}
+          </ol>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Competitors({ notify }) {
+  const [rows, setRows] = useState(null)
+  useEffect(() => { api.competitors().then(setRows).catch((e) => notify(e.message, true)) }, [])
+  if (!rows) return <Spinner />
+  if (rows.length === 0) return <Empty quip="Run “Analyse SERPs” first - competitors are whoever keeps outranking you." />
+  return (
+    <div className="overflow-hidden rounded-xl border border-edge">
+      <table className="w-full text-xs">
+        <thead className="bg-panel text-left uppercase tracking-widest text-dim"><tr><th className="px-3 py-2">domain</th><th className="px-3 py-2">clusters</th><th className="px-3 py-2">best rank</th><th className="px-3 py-2">keywords they rank for</th></tr></thead>
+        <tbody>{rows.map((c) => (
+          <tr key={c.domain} className="border-t border-edge"><td className="px-3 py-1.5 mono">{c.domain}</td><td className="px-3 py-1.5 mono">{c.clusters}</td><td className="px-3 py-1.5 mono">#{c.best_rank}</td><td className="px-3 py-1.5 text-dim">{c.keywords.join(', ')}</td></tr>
+        ))}</tbody>
+      </table>
     </div>
   )
 }
