@@ -104,6 +104,15 @@ export const api = {
   mergeCluster: (id, from_id) => send(`/api/clusters/${id}/merge`, 'POST', { from_id }),
   splitCluster: (id, keyword_ids, name) => send(`/api/clusters/${id}/split`, 'POST', { keyword_ids, name }),
   deleteCluster: (id) => send(`/api/clusters/${id}`, 'DELETE'),
+  // google + insights
+  googleStatus: () => authedFetch('/api/google/status' + sq()),
+  googleAuthUrl: () => authedFetch('/api/google/auth-url'),
+  googleDisconnect: () => send('/api/google/disconnect', 'POST'),
+  googleProperties: () => authedFetch('/api/google/properties'),
+  googleSync: () => send('/api/google/sync' + sq(), 'POST'),
+  siteSettings: (id, body) => send(`/api/sites/${id}/settings`, 'PATCH', body),
+  insights: () => authedFetch('/api/insights' + sq()),
+  adoptKeywords: () => send('/api/insights/adopt-keywords' + sq(), 'POST'),
   // seo
   technicalSeo: () => authedFetch('/api/seo/technical' + sq()),
   startCrawl: () => send('/api/seo/crawl' + sq(), 'POST'),

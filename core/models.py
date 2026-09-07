@@ -249,3 +249,45 @@ class Keyword(models.Model):
 
     class Meta:
         unique_together = [("site", "text")]
+
+
+class GscRow(models.Model):
+    """One Search Console row: date x query x page. Source + freshness live on the sync."""
+    site = models.CharField(max_length=48, db_index=True)
+    date = models.DateField()
+    query = models.CharField(max_length=300)
+    page = models.CharField(max_length=1000)
+    clicks = models.IntegerField(default=0)
+    impressions = models.IntegerField(default=0)
+    ctr = models.FloatField(default=0)
+    position = models.FloatField(default=0)
+
+    class Meta:
+        indexes = [models.Index(fields=["site", "date"]), models.Index(fields=["site", "query"]),
+                   models.Index(fields=["site", "page"])]
+
+
+class Ga4Row(models.Model):
+    """One GA4 row: date x landing page x channel."""
+    site = models.CharField(max_length=48, db_index=True)
+    date = models.DateField()
+    landing_page = models.CharField(max_length=1000)
+    channel = models.CharField(max_length=64, default="")
+    sessions = models.IntegerField(default=0)
+    users = models.IntegerField(default=0)
+    conversions = models.FloatField(default=0)
+
+    class Meta:
+        indexes = [models.Index(fields=["site", "date"]), models.Index(fields=["site", "landing_page"])]
+
+
+class Sync(models.Model):
+    """Data provenance: which source, when, how many rows, what went wrong."""
+    site = models.CharField(max_length=48, db_index=True)
+    source = models.CharField(max_length=16)  # gsc | ga4
+    started_at = models.DateTimeField(default=timezone.now)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    rows = models.IntegerField(default=0)
+    date_from = models.DateField(null=True, blank=True)
+    date_to = models.DateField(null=True, blank=True)
+    error = models.TextField(default="", blank=True)

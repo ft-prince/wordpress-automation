@@ -103,7 +103,62 @@ export default function Sites({ notify, onSiteChange }) {
         </div>
       ))}
 
+      <GooglePanel notify={notify} sites={data.sites} reload={load} />
+
       {adding && <AddSite notify={notify} onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load() }} />}
+    </div>
+  )
+}
+
+
+// -- Google (Search Console + GA4) --------------------------------------------
+
+function GooglePanel({ notify, sites, reload }) {
+  const [st, setSt] = useState(null)
+  const [props, setProps] = useState(null)
+  const [form, setForm] = useState({})
+  const load = () => api.googleStatus().then(setSt).catch(() => setSt({ configured: false }))
+  useEffect(() => {
+    load()
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('google') === 'connected') notify('Google connected')
+    if (q.get('google') === 'error') notify(`Google connection failed: ${q.get('reason')}`, true)
+  }, [])
+  if (!st) return null
+  const connect = () => api.googleAuthUrl().then((r) => { window.location.href = r.url }).catch((e) => notify(e.message, true))
+  const loadProps = () => api.googleProperties().then(setProps).catch((e) => notify(e.message, true))
+  const save = (s) => api.siteSettings(s.id, form[s.id] || {}).then(() => { notify('saved'); reload() }).catch((e) => notify(e.message, true))
+  const set = (id, k, v) => setForm({ ...form, [id]: { ...(form[id] || {}), [k]: v } })
+  return (
+    <div className="rounded-xl border border-edge bg-panel p-4 text-sm">
+      <div className="flex items-center gap-3">
+        <div>
+          <div className="font-medium">Google Search Console + GA4</div>
+          <div className="text-xs text-dim">
+            {!st.configured ? 'Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on the Secrets page, then connect.'
+              : st.connected ? 'Connected. One login covers every site; each site names its own properties.' : 'Client configured - connect your Google account.'}
+          </div>
+        </div>
+        <span className="ml-auto flex gap-2">
+          {st.connected && <button className={btnGhost} onClick={loadProps}>List my properties</button>}
+          {st.connected ? <button className={btnGhost} onClick={() => api.googleDisconnect().then(load)}>Disconnect</button>
+            : <button className={btnPrimary} disabled={!st.configured} onClick={connect}>Connect Google</button>}
+        </span>
+      </div>
+      {props && (
+        <div className="mt-3 grid gap-2 text-xs mono md:grid-cols-2">
+          <div><div className="text-dim">Search Console properties</div>{props.gsc.map((p) => <div key={p}>{p}</div>)}</div>
+          <div><div className="text-dim">GA4 properties</div>{props.ga4.length ? props.ga4.map((p) => <div key={p.id}>{p.id} · {p.name}</div>) : <div className="text-dim">(grant not available - type the id from GA4 admin)</div>}</div>
+        </div>
+      )}
+      {st.configured && sites.map((s) => (
+        <div key={s.id} className="mt-3 grid items-end gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
+          <label className="text-xs text-dim">{s.name} · GSC property<input className={`${field} mt-1 mono`} placeholder="sc-domain:example.com or https://example.com/" defaultValue={s.gsc_property} onChange={(e) => set(s.id, 'gsc_property', e.target.value)} /></label>
+          <label className="text-xs text-dim">GA4 property id<input className={`${field} mt-1 mono`} placeholder="123456789" defaultValue={s.ga4_property} onChange={(e) => set(s.id, 'ga4_property', e.target.value)} /></label>
+          <label className="text-xs text-dim">Country / language<input className={`${field} mt-1 mono`} placeholder="IN / en" defaultValue={[s.country, s.language].filter(Boolean).join(' / ')} onChange={(e) => { const [c, l] = e.target.value.split('/').map((x) => x.trim()); set(s.id, 'country', c || ''); set(s.id, 'language', l || '') }} /></label>
+          <button className={btnGhost} onClick={() => save(s)}>Save</button>
+        </div>
+      ))}
     </div>
   )
 }

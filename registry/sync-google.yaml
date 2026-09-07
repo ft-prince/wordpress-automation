@@ -1,0 +1,22 @@
+id: sync-google
+name: Sync Search Console + GA4
+description: Pulls the last 90 days of queries, clicks, impressions, positions and
+  organic sessions so the Performance page and the automation rules run on real data
+runtime: python
+entrypoint: sync_google.py
+schedule: 30 4 * * *
+enabled: true
+timeout_seconds: 600
+retries:
+  count: 1
+  backoff_seconds: 120
+args:
+  days: 90
+env:
+- GOOGLE_CLIENT_ID
+- GOOGLE_CLIENT_SECRET
+- GOOGLE_REFRESH_TOKEN
+tags:
+- seo
+- google
+alert_on_failure: true

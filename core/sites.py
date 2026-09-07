@@ -44,10 +44,29 @@ def _migrate_from_env():
     return [site]
 
 
+EXTRA_FIELDS = ("gsc_property", "ga4_property", "country", "language")
+
+
 def all_sites():
     """Public listing — passwords never leave the server."""
-    return [{"id": s["id"], "name": s["name"], "url": s["url"], "user": s["user"]}
+    return [{"id": s["id"], "name": s["name"], "url": s["url"], "user": s["user"],
+             **{k: s.get(k, "") for k in EXTRA_FIELDS}}
             for s in _read()]
+
+
+def update(site_id, **fields):
+    """Non-credential settings: Search Console property, GA4 property id, market."""
+    bad = [k for k in fields if k not in EXTRA_FIELDS]
+    if bad:
+        raise ValueError(f"not editable: {', '.join(bad)}")
+    with _lock:
+        sites = _read()
+        site = next((s for s in sites if s["id"] == site_id), None)
+        if not site:
+            raise ValueError(f"no such site: {site_id}")
+        site.update({k: (v or "").strip() for k, v in fields.items()})
+        _write(sites)
+    return {k: site.get(k, "") for k in EXTRA_FIELDS}
 
 
 def default_id():
@@ -66,6 +85,7 @@ def env_for(site_id=None):
         "WP_USER": site["user"],
         "APPLICATION_PASSWORD": site["password"],
         "_site_id": site["id"],
+        **{k: site.get(k, "") for k in EXTRA_FIELDS},
     }
 
 

@@ -244,3 +244,69 @@ class KeywordOpsTest(TestCase):
         self.assertEqual(keywords.harvest(), 1)
         kw = Keyword.objects.get(site="t", text="crowd people analytics")
         self.assertEqual(kw.found_on, ["https://t/x/"])
+
+
+class InsightsTest(TestCase):
+    """Rules over synthetic GSC/GA4 rows: each rule fires on the row built to trigger it."""
+
+    def setUp(self):
+        from datetime import date, timedelta
+        from unittest import mock
+
+        from core import sites
+        from core.models import Ga4Row, GscRow, Keyword
+
+        p = mock.patch.object(sites, "env_for", lambda site=None: {"_site_id": "t", "WEBSITE_LINK": "https://t"})
+        p.start()
+        self.addCleanup(p.stop)
+        today = date.today() - timedelta(days=5)
+        prev = today - timedelta(days=35)
+        rows = [
+            # striking distance
+            GscRow(site="t", date=today, query="edge ai cameras", page="https://t/a/", clicks=2, impressions=100, position=12),
+            # weak CTR at position 3
+            GscRow(site="t", date=today, query="cctv analytics", page="https://t/b/", clicks=1, impressions=300, position=3),
+            # cannibalization: two pages share a query
+            GscRow(site="t", date=today, query="people counting", page="https://t/c/", clicks=5, impressions=60, position=6),
+            GscRow(site="t", date=today, query="people counting", page="https://t/d/", clicks=3, impressions=50, position=9),
+            # ranking decline on /e/
+            GscRow(site="t", date=prev, query="q", page="https://t/e/", clicks=10, impressions=100, position=4),
+            GscRow(site="t", date=today, query="q", page="https://t/e/", clicks=2, impressions=100, position=11),
+        ]
+        GscRow.objects.bulk_create(rows)
+        Keyword.objects.create(site="t", text="cctv analytics")
+        Ga4Row.objects.bulk_create([
+            Ga4Row(site="t", date=prev, landing_page="https://t/e/", channel="Organic Search", sessions=100),
+            Ga4Row(site="t", date=today, landing_page="https://t/e/", channel="Organic Search", sessions=40),
+        ])
+
+    def test_rules_fire(self):
+        from core import insights
+
+        self.assertEqual(insights.page1_opportunities()[0]["query"], "edge ai cameras")  # most impressions first
+        ctr = insights.ctr_opportunities()
+        self.assertEqual(ctr[0]["page"], "https://t/b/")
+        self.assertGreater(ctr[0]["missed_clicks"], 20)
+        can = insights.cannibalization()
+        self.assertEqual(can[0]["query"], "people counting")
+        self.assertEqual(len(can[0]["pages"]), 2)
+        new = {r["query"] for r in insights.new_keywords()}
+        self.assertIn("people counting", new)
+        self.assertNotIn("cctv analytics", new)  # already known
+        self.assertEqual(insights.ranking_decline()[0]["page"], "https://t/e/")
+        drop = insights.traffic_decline()[0]
+        self.assertEqual((drop["page"], drop["drop"]), ("https://t/e/", 60))
+        plan = {p["page"]: p["action"] for p in insights.refresh_plan()}
+        self.assertEqual(plan["https://t/e/"], "Refresh")
+        self.assertEqual(plan["https://t/b/"], "Re-optimize")
+        self.assertEqual(plan["https://t/d/"], "Merge")
+        s = insights.summary()
+        self.assertEqual(s["cannibalization"], 1)
+
+    def test_report_totals(self):
+        from core import insights
+
+        r = insights.traffic_report()
+        self.assertEqual(r["organic"]["now"]["sessions"], 40)
+        self.assertEqual(r["organic"]["before"]["sessions"], 100)
+        self.assertEqual(r["search"]["now"]["clicks"], 13)
