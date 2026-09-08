@@ -93,9 +93,26 @@ Ground the post in these researched facts (weave them in naturally, keep the yea
 """
 
 
+def target(payload, key):
+    """Which endpoint serves this call. LLM_BASE_URL (+ LLM_MODEL, LLM_KEY) in .env routes
+    ordinary generation to a local OpenAI-compatible server such as Ollama on the GPU;
+    Groq-only models (groq/compound*, browser_search tool) always stay on Groq."""
+    env = load_env()
+    local = (env.get("LLM_BASE_URL") or "").rstrip("/")
+    model = payload.get("model", "")
+    groq_only = model.startswith("groq/") or any(t.get("type") == "browser_search" for t in payload.get("tools", []))
+    if local and not groq_only:
+        return local, env.get("LLM_KEY") or "local", env.get("LLM_MODEL") or model
+    return GROQ_URL, key, model
+
+
 def _post(path, payload, key, _retried=False, purpose="gen"):
+    base, key, model = target(payload, key)
+    payload = {**payload, "model": model}
+    if base != GROQ_URL:
+        payload.pop("reasoning_effort", None)   # Groq-specific knob
     request = urllib.request.Request(
-        f"{GROQ_URL}{path}",
+        f"{base}{path}",
         data=json.dumps(payload).encode(),
         # Groq's CDN 403s the default Python-urllib agent. Any real UA passes.
         headers={
@@ -117,7 +134,7 @@ def _post(path, payload, key, _retried=False, purpose="gen"):
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf8", "replace")[:400]
         # Daily cap on the big model: fall back to the small one (own quota) instead of dying.
-        if exc.code == 429 and "per day" in detail and payload.get("model") == FALLBACK_FROM and not _retried:
+        if exc.code == 429 and "per day" in detail and base == GROQ_URL and payload.get("model") == FALLBACK_FROM and not _retried:
             return _post(path, {**payload, "model": FALLBACK_MODEL}, key, _retried=True, purpose=purpose)
         # Free tier is 8k tokens/min — wait out a 429 once instead of failing the run.
         if exc.code == 429 and not _retried:
@@ -127,7 +144,7 @@ def _post(path, payload, key, _retried=False, purpose="gen"):
             return _post(path, payload, key, _retried=True, purpose=purpose)
         raise RuntimeError(f"Groq {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
-        raise RuntimeError(f"cannot reach Groq: {exc.reason}") from exc
+        raise RuntimeError(f"cannot reach {'Groq' if base == GROQ_URL else base}: {exc.reason}") from exc
 
 
 def _split_title(text):

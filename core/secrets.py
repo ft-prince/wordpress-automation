@@ -6,7 +6,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(ROOT, ".env")
 SAFE_KEY = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 # Values for these keys are shown in full — they are configuration, not credentials.
-PUBLIC_KEYS = {"WEBSITE_LINK", "WP_USER", "APPLICATION_NAME", "GROQ_MODEL"}
+PUBLIC_KEYS = {"WEBSITE_LINK", "WP_USER", "APPLICATION_NAME", "GROQ_MODEL", "LLM_BASE_URL", "LLM_MODEL", "PUBLIC_URL", "DJANGO_ALLOWED_HOSTS", "GOOGLE_CSE_ID"}
 
 
 def mask(value):

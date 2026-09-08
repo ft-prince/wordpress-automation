@@ -417,3 +417,27 @@ class SerpPagespeedTest(TestCase):
         codes = {g["code"] for g in technical.analyze(c, list(c.pages.all()))["issues"]}
         self.assertTrue({"cwv-lcp-poor", "cwv-cls-poor", "psi-low", "cwv-inp-poor"} <= codes)
         self.assertNotIn("cwv-lcp-slow", codes)
+
+
+class LlmRoutingTest(TestCase):
+    def test_local_endpoint_routing(self):
+        from unittest import mock
+
+        import gen
+
+        with mock.patch.object(gen, "load_env", lambda *a, **k: {"LLM_BASE_URL": "http://127.0.0.1:11434/v1/", "LLM_MODEL": "gpt-oss:20b"}):
+            base, key, model = gen.target({"model": "openai/gpt-oss-120b"}, "gsk_x")
+            self.assertEqual((base, key, model), ("http://127.0.0.1:11434/v1", "local", "gpt-oss:20b"))
+            base, key, model = gen.target({"model": "openai/gpt-oss-120b", "tools": [{"type": "browser_search"}]}, "gsk_x")
+            self.assertEqual((base, key, model), (gen.GROQ_URL, "gsk_x", "openai/gpt-oss-120b"))
+            base, _, model = gen.target({"model": "groq/compound-mini"}, "gsk_x")
+            self.assertEqual((base, model), (gen.GROQ_URL, "groq/compound-mini"))
+        with mock.patch.object(gen, "load_env", lambda *a, **k: {}):
+            self.assertEqual(gen.target({"model": "openai/gpt-oss-120b"}, "gsk_x")[0], gen.GROQ_URL)
+
+    def test_local_models_cost_nothing(self):
+        from core import costs
+        from core.models import LlmCall
+
+        costs.record({"model": "gpt-oss:20b", "usage": {"prompt_tokens": 5000, "completion_tokens": 5000}})
+        self.assertEqual(LlmCall.objects.get().cost_usd, 0)

@@ -19,7 +19,7 @@ def record(response, purpose=""):
         model = response.get("model") or ""
         if not usage:
             return
-        p_in, p_out = PRICES.get(model, DEFAULT_PRICE)
+        p_in, p_out = PRICES.get(model, (0, 0) if ":" in model or not model.startswith(("openai/", "groq/")) else DEFAULT_PRICE)  # local models cost nothing
         pt, ct = int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0))
         LlmCall.objects.create(model=model[:64], purpose=purpose[:32], prompt_tokens=pt, completion_tokens=ct,
                                cost_usd=(pt * p_in + ct * p_out) / 1_000_000)
@@ -36,4 +36,8 @@ def summary():
         return {"calls": LlmCall.objects.filter(ts__gte=now - timedelta(days=days)).count(),
                 "tokens": (agg["pt"] or 0) + (agg["ct"] or 0), "usd": round(agg["usd"] or 0, 4)}
 
-    return {"today": window(1), "week": window(7), "month": window(30)}
+    from core import secrets
+
+    env = secrets._parse()
+    return {"today": window(1), "week": window(7), "month": window(30),
+            "endpoint": env.get("LLM_BASE_URL") or "groq", "model": env.get("LLM_MODEL") or env.get("GROQ_MODEL") or "openai/gpt-oss-120b"}

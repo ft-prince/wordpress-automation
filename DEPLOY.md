@@ -67,3 +67,23 @@ The OAuth redirect URI must be exactly `https://press.example.com/api/google/cal
 | Scheduler | inside that worker (APScheduler); one worker so it runs once |
 | Jobs | subprocesses of the worker (`.venv/bin/python <script>`), logs in SQLite |
 | Tunnel | cloudflared → 127.0.0.1:7071 |
+
+## 7. Optional: your own GPU for generation
+
+Everything works on Groq's free tier, but it caps the big model at ~200k tokens/day. A card with 16 GB (RTX 5060 Ti or better) runs `gpt-oss:20b` locally with no cap; slower per token, unlimited volume. Web search stays on Groq (it is a Groq-side tool).
+
+On the same PC:
+
+```
+winget install Ollama.Ollama          (or download from ollama.com)
+ollama pull gpt-oss:20b               (~13 GB, once)
+```
+
+Then in `.env`:
+
+```
+LLM_BASE_URL=http://127.0.0.1:11434/v1
+LLM_MODEL=gpt-oss:20b
+```
+
+Restart the service. Health → AI spend shows `local http://127.0.0.1:11434/v1 · gpt-oss:20b` and $0. Remove the two lines to go back to Groq. Any OpenAI-compatible server works (LM Studio, vLLM) - point `LLM_BASE_URL` at it and set `LLM_KEY` if it wants one.
