@@ -1,5 +1,9 @@
-# Windows: run from the repo root in PowerShell. gunicorn needs Unix; use Django's server.
-# For always-on, register with NSSM (nssm install presspilot) pointing at this script.
+# Windows production server (waitress, single process so the scheduler runs once).
+#   powershell -ExecutionPolicy Bypass -File deploy\run.ps1
+# Always-on: deploy\service.ps1 registers it as a Windows service with NSSM.
+$ErrorActionPreference = "Stop"
+Set-Location (Join-Path $PSScriptRoot "..")
 $env:PYTHONUNBUFFERED = "1"
+$port = if ($env:PORT) { $env:PORT } else { "7071" }
 & .\.venv\Scripts\python.exe manage.py migrate --noinput
-& .\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:7071 --noreload
+& .\.venv\Scripts\waitress-serve.exe --listen="127.0.0.1:$port" --threads=8 --channel-timeout=600 presspilot.wsgi:application

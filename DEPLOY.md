@@ -18,6 +18,23 @@ deploy/run.sh              # gunicorn on 127.0.0.1:7071
 Always-on: `sudo cp deploy/presspilot.service /etc/systemd/system/`, fix `User=` and paths, `sudo systemctl enable --now presspilot`.
 Updates: `git pull && deploy/install.sh && sudo systemctl restart presspilot`.
 
+## 1b. Windows
+
+Install Python 3.11+ (tick *Add to PATH*), Node 18+, Git. Then in **cmd** or PowerShell:
+
+```
+git clone https://github.com/ft-prince/wordpress-automation.git C:\opt\presspilot
+cd C:\opt\presspilot
+powershell -ExecutionPolicy Bypass -File deploy\install.ps1
+notepad .env                                   (GROQ_KEY, PUBLIC_URL)
+powershell -ExecutionPolicy Bypass -File deploy\run.ps1
+```
+
+Always-on: get [NSSM](https://nssm.cc/download), then as Administrator `powershell -ExecutionPolicy Bypass -File deploy\service.ps1` (service `PressPilot`, logs in `service.log`).
+Updates: `git pull`, re-run `install.ps1`, `nssm restart PressPilot`.
+
+Tunnel on Windows: download `cloudflared.exe`, put the config at `%USERPROFILE%\.cloudflared\config.yml`, then `cloudflared tunnel login / create / route dns` as below and `cloudflared service install` (as Administrator).
+
 ## 2. Tunnel
 
 ```bash
@@ -46,7 +63,7 @@ The OAuth redirect URI must be exactly `https://press.example.com/api/google/cal
 
 | What | Where |
 |---|---|
-| Dashboard + API | gunicorn, 127.0.0.1:7071, 1 worker × 8 threads |
+| Dashboard + API | gunicorn (Linux/macOS) or waitress (Windows), 127.0.0.1:7071, 1 process × 8 threads |
 | Scheduler | inside that worker (APScheduler); one worker so it runs once |
 | Jobs | subprocesses of the worker (`.venv/bin/python <script>`), logs in SQLite |
 | Tunnel | cloudflared → 127.0.0.1:7071 |
