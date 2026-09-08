@@ -111,7 +111,7 @@ function Bell({ onNavigate, version }) {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-96 rounded-xl border border-edge bg-panel p-2 shadow-2xl" role="dialog" aria-label="Notifications">
+        <div className="absolute right-0 top-11 z-50 w-96 rounded-xl border border-edge bg-panel p-2 shadow-2xl max-md:fixed max-md:inset-x-2 max-md:top-14 max-md:w-auto" role="dialog" aria-label="Notifications">
           <div className="flex items-center px-2 py-1.5">
             <h3 className="text-xs uppercase tracking-widest text-dim">Notifications</h3>
             {visible.length > 0 && <button className="ml-auto text-xs text-dim hover:text-ink" onClick={() => remember(visible.map((n) => `x|${noteKey(n)}`))}>Clear all</button>}

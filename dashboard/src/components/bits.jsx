@@ -53,9 +53,9 @@ export function CopyBtn({ text, notify }) {
 
 export function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-6 max-md:p-2" onClick={onClose}>
       <div
-        className={`log-line w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl border border-edge bg-panel p-6 shadow-2xl`}
+        className={`log-line w-full min-w-0 ${wide ? 'max-w-3xl' : 'max-w-lg'} rounded-xl border border-edge bg-panel p-6 shadow-2xl max-md:p-4`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={title}

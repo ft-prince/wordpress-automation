@@ -25,7 +25,7 @@ export default function Palette({ nav, onNavigate, notify, onClose }) {
     if (e.key === 'Enter') pick(hits[idx])
   }
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-6 pt-24" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-6 pt-24 max-md:p-2 max-md:pt-12" onClick={onClose}>
       <div className="w-full max-w-lg rounded-xl border border-edge bg-panel shadow-2xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Command palette">
         <input ref={input} value={q} onChange={(e) => { setQ(e.target.value); setIdx(0) }} onKeyDown={onKey} placeholder="Jump to a page, run an automation…"
           className="w-full border-b border-edge bg-transparent px-4 py-3 text-sm outline-none" />

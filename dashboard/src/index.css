@@ -45,3 +45,21 @@ body {
 .prose-edit p { margin: 0.5em 0; line-height: 1.65; }
 .prose-edit ul { list-style: disc; padding-left: 1.4em; margin: 0.5em 0; }
 .prose-edit a { color: var(--color-accent); text-decoration: underline; }
+
+/* ---- small screens: nothing may widen the page; wide things scroll inside their box ---- */
+@media (max-width: 1023px) {
+  main { overflow-x: hidden; min-width: 0; }
+  main table { display: block; overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+  main table th, main table td { white-space: nowrap; }
+  main .mono, main pre, main code { overflow-wrap: anywhere; word-break: break-word; }
+  main .flex:not(.flex-col):not(.flex-nowrap):not([role="tablist"]) { flex-wrap: wrap; }
+  main nav.flex { flex-wrap: wrap; }
+  main [role="tablist"] { overflow-x: auto; }
+  main .grid > *, main .flex > * { min-width: 0; }
+  main input, main select, main textarea { max-width: 100%; }
+  main svg { max-width: 100%; }
+}
+@media (max-width: 767px) {
+  main { padding: 0.875rem; }
+  main .max-w-3xl, main .max-w-2xl, main .max-w-xl, main .max-w-4xl { max-width: 100%; }
+}
