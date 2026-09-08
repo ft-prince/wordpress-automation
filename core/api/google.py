@@ -16,7 +16,12 @@ class SiteSettings(Schema):
 
 
 def _base(request):
-    """Must equal the redirect URI registered in Google Cloud, whatever host the browser used."""
+    """Must equal the redirect URI registered in Google Cloud. PUBLIC_URL wins when set
+    (tunnel / reverse proxy); locally the loopback address is what was registered."""
+    from django.conf import settings
+
+    if settings.PUBLIC_URL:
+        return settings.PUBLIC_URL
     host = request.get_host().replace("localhost", "127.0.0.1")
     return f"{request.scheme}://{host}"
 

@@ -30,7 +30,21 @@ if not SECRET_KEY:
         fh.write(f"\nDJANGO_SECRET_KEY={SECRET_KEY}\n")
 
 DEBUG = _env.get("DJANGO_DEBUG", "0") == "1"
-ALLOWED_HOSTS = [h for h in _env.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
+PUBLIC_URL = _env.get("PUBLIC_URL", "").rstrip("/")   # e.g. https://press.example.com behind a tunnel
+_public_host = PUBLIC_URL.split("//")[-1].split("/")[0] if PUBLIC_URL else ""
+ALLOWED_HOSTS = [h.strip() for h in _env.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
+if _public_host and _public_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_public_host)
+
+# Behind Cloudflare / any reverse proxy: trust its scheme + host headers so Django
+# builds https URLs and CSRF (admin) accepts the public origin.
+CSRF_TRUSTED_ORIGINS = [PUBLIC_URL] if PUBLIC_URL else []
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+if PUBLIC_URL.startswith("https://"):
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "same-origin"
 
 INSTALLED_APPS = [
     "django.contrib.admin",

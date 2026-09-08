@@ -1,0 +1,17 @@
+# sudo cp deploy/presspilot.service /etc/systemd/system/ && sudo systemctl enable --now presspilot
+# Edit User= and WorkingDirectory= for the machine.
+[Unit]
+Description=PressPilot dashboard + scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=presspilot
+WorkingDirectory=/opt/presspilot
+ExecStart=/opt/presspilot/deploy/run.sh
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

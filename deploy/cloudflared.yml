@@ -1,0 +1,15 @@
+# ~/.cloudflared/config.yml on the remote PC. Then:
+#   cloudflared tunnel login
+#   cloudflared tunnel create presspilot
+#   cloudflared tunnel route dns presspilot press.example.com
+#   cloudflared tunnel run presspilot          (or: sudo cloudflared service install)
+tunnel: presspilot
+credentials-file: /home/presspilot/.cloudflared/<TUNNEL-ID>.json
+
+ingress:
+  - hostname: press.example.com
+    service: http://127.0.0.1:7071
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: true
+  - service: http_status:404

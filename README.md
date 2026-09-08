@@ -18,6 +18,10 @@ A self-hosted dashboard that plans, writes, and publishes blog content for one o
 - Content: Groq API (article generation and research), Pexels API (images)
 - Publishing: WordPress REST API with Application Passwords
 
+## Deploying
+
+See [DEPLOY.md](DEPLOY.md): `deploy/install.sh`, `deploy/run.sh` (gunicorn), a systemd unit and a Cloudflare Tunnel config.
+
 ## Setup
 
 1. `python3 -m venv .venv && .venv/bin/pip install django django-ninja pyyaml apscheduler`

@@ -7,7 +7,8 @@ import threading
 from core import registry, store
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PYTHON = os.path.join(ROOT, ".venv", "bin", "python")
+_VENV = [os.path.join(ROOT, ".venv", "bin", "python"), os.path.join(ROOT, ".venv", "Scripts", "python.exe")]
+PYTHON = next((p for p in _VENV if os.path.exists(p)), sys.executable)  # Linux/macOS or Windows venv
 DEFAULT_TIMEOUT = 300
 
 _procs = {}   # run_id -> Popen, so a run can be killed from the dashboard
