@@ -69,7 +69,8 @@ export function Users({ notify }) {
             {['admin', 'seo', 'content', 'viewer'].map((r) => <option key={r}>{r}</option>)}
           </select>
           <span className="text-xs text-dim">{u.last_login ? `last login ${fmtTime(u.last_login)}` : 'never logged in'}</span>
-          {u.username !== me.username && <button className={`${btnGhost} ml-auto`} style={{ color: 'var(--color-bad)' }} onClick={() => confirm(`Remove ${u.username}?`) && api.deleteUser(u.id).then(load)}>Remove</button>}
+          <button className={`${btnGhost} ml-auto`} onClick={() => { const p = prompt(`New password for ${u.username} (8+ characters)`); if (p) api.patchUser(u.id, { password: p }).then(() => notify(`password changed for ${u.username}`)).catch((err) => notify(err.message, true)) }}>Reset password</button>
+          {u.username !== me.username && <button className={btnGhost} style={{ color: 'var(--color-bad)' }} onClick={() => confirm(`Remove ${u.username}?`) && api.deleteUser(u.id).then(load)}>Remove</button>}
         </div>
       ))}
       <div className="flex gap-2">
